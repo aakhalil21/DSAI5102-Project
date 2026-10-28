@@ -53,10 +53,17 @@ if not DATABASE_FILE.exists():
 
 
 st.title("NYC Yellow Taxi Analytics")
-
+st.caption(
+    "Charts exclude records with missing or negative fare or total amounts. "
+    "Recorded charges are passenger charges, not profit, and exclude "
+    "cash tips. Tip figures reflect recorded tips; cash tips are "
+    "not captured. Average distance excludes zero-distance trips "
+    "and trips over 100 miles. Average duration excludes trips "
+    "longer than six hours."
+)
 st.markdown(
     """
-    Explore demand, revenue, fares, payment behaviour,
+    Explore demand, Recorded charges (USD), fares, payment behaviour,
     and pickup-zone performance for January 2025.
     """
 )
@@ -118,7 +125,7 @@ else:
 
 where_conditions = [
     "pickup_date between ? and ?",
-    "not is_financial_adjustment",
+    "(not is_financial_adjustment and not is_financial_data_missing)",
 ]
 
 query_parameters = [
@@ -173,14 +180,14 @@ if metrics.loc[0, "total_trips"] == 0:
 metric_columns = st.columns(5)
 
 metric_columns[0].metric(
-    "Total trips",
+    "Trips with valid financial data",
     "{:,.0f}".format(
         metrics.loc[0, "total_trips"]
     ),
 )
 
 metric_columns[1].metric(
-    "Total revenue",
+    "Recorded charges",
     "${:,.0f}".format(
         metrics.loc[0, "total_revenue"]
     ),
@@ -250,15 +257,16 @@ with left_chart:
     )
 
 with right_chart:
-    st.subheader("Daily revenue")
+    st.subheader("Daily recorded charges")
 
-    daily_revenue_figure = px.area(
+    daily_revenue_figure = px.line(
         daily_data,
+        markers=True,
         x="pickup_date",
         y="total_revenue",
         labels={
             "pickup_date": "Pickup date",
-            "total_revenue": "Revenue (USD)",
+            "total_revenue": "Recorded charges (USD)",
         },
     )
 
@@ -449,8 +457,11 @@ payment_summary = run_query(
         ).replace(
             "pickup_borough",
             "trips.pickup_borough",
+        ).replace(
+            "is_financial_data_missing",
+            "trips.is_financial_data_missing",
         )
-    ),
+            ),
     tuple(query_parameters),
 )
 
@@ -479,7 +490,7 @@ with right_chart:
     display_payment_data.columns = [
         "Payment method",
         "Trips",
-        "Revenue",
+        "Recorded charges (USD)",
         "Average tip percentage",
     ]
 

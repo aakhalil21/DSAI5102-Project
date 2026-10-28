@@ -123,3 +123,11 @@ Rejected records will remain available in a separate rejected-record model with 
 These rules are initial decisions based on January 2025 profiling results.
 
 They may be refined after inspecting distributions, reviewing official data documentation, and comparing additional months. Any changes will be recorded in this document.
+
+## Missing financial values
+
+Records with missing fare_amount or total_amount remain in the
+accepted fact table if they pass the other acceptance checks.
+They are flagged with is_financial_data_missing and excluded
+from standard dashboard metrics and financial summaries.
+Missing amounts are not replaced with zero.

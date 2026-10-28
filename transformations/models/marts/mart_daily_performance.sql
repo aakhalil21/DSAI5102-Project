@@ -5,7 +5,7 @@ select
         as accepted_record_count,
 
     count_if(
-        not is_financial_adjustment
+        (not is_financial_adjustment and not is_financial_data_missing)
     ) as standard_trip_count,
 
     count_if(
@@ -22,7 +22,7 @@ select
 
     sum(
         case
-            when not is_financial_adjustment
+            when (not is_financial_adjustment and not is_financial_data_missing)
             then total_amount
             else 0
         end
@@ -30,7 +30,7 @@ select
 
     avg(
         case
-            when not is_financial_adjustment
+            when (not is_financial_adjustment and not is_financial_data_missing)
                 and not is_zero_distance
                 and not is_unusually_long_distance
             then trip_distance
@@ -40,7 +40,7 @@ select
 
     avg(
         case
-            when not is_financial_adjustment
+            when (not is_financial_adjustment and not is_financial_data_missing)
                 and not is_unusually_long_duration
             then trip_duration_minutes
             else null
@@ -49,7 +49,7 @@ select
 
     avg(
         case
-            when not is_financial_adjustment
+            when (not is_financial_adjustment and not is_financial_data_missing)
             then fare_amount
             else null
         end

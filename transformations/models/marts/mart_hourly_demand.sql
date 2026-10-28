@@ -26,7 +26,7 @@ select
 
 from {{ ref('fact_trips') }}
 
-where not is_financial_adjustment
+where (not is_financial_adjustment and not is_financial_data_missing)
 
 group by
     pickup_weekday,

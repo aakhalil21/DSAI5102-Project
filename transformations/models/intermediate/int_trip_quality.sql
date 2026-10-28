@@ -158,7 +158,12 @@ enriched as (
             then true
             else false
         end as is_financial_adjustment,
-
+        case
+            when trips.fare_amount is null
+                or trips.total_amount is null
+            then true
+            else false
+        end as is_financial_data_missing,
         case
             when trips.trip_distance > 0
                 and trips.fare_amount >= 0
