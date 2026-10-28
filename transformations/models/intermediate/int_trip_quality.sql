@@ -83,10 +83,10 @@ enriched as (
             as dropoff_service_zone,
 
         date_diff(
-            'minute',
+            'second',
             trips.pickup_datetime,
             trips.dropoff_datetime
-        ) as trip_duration_minutes,
+        ) / 60.0 as trip_duration_minutes,
 
         cast(trips.pickup_datetime as date)
             as pickup_date,
