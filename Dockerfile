@@ -1,0 +1,20 @@
+FROM python:3.9-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install -r requirements.txt
+
+COPY ingestion ./ingestion
+COPY orchestration ./orchestration
+COPY transformations ./transformations
+COPY docs ./docs
+COPY dashboard ./dashboard
+EXPOSE 8501
+CMD ["python", "orchestration/pipeline.py"]

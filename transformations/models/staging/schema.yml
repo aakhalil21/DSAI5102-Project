@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: stg_taxi_zones
+    description: >
+      Clean staging model for the official NYC taxi-zone
+      lookup table.
+
+    columns:
+      - name: location_id
+        description: Unique TLC taxi-zone identifier.
+        tests:
+          - not_null
+          - unique
+
+      - name: borough
+        description: Borough associated with the taxi zone.
+        tests:
+          - not_null
+
+      - name: zone_name
+        description: Human-readable taxi-zone name.
+        tests:
+          - not_null
+
+  - name: stg_yellow_taxi_trips
+    description: >
+      Renamed and type-standardized January 2025 Yellow
+      Taxi trip records. No business filtering is applied
+      at this staging layer.
+
+    columns:
+      - name: pickup_datetime
+        description: Recorded trip pickup timestamp.
+        tests:
+          - not_null
+
+      - name: dropoff_datetime
+        description: Recorded trip drop-off timestamp.
+        tests:
+          - not_null
+
+      - name: pickup_location_id
+        description: TLC identifier for the pickup zone.
+        tests:
+          - not_null
+
+      - name: dropoff_location_id
+        description: TLC identifier for the drop-off zone.
+        tests:
+          - not_null
+
+      - name: trip_distance
+        description: Recorded trip distance in miles.
+
+      - name: fare_amount
+        description: Metered fare amount before additions.
+
+      - name: total_amount
+        description: Total amount charged to the passenger.

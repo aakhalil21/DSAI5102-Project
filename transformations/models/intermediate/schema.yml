@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: int_trip_quality
+    description: >
+      Yellow Taxi trips enriched with taxi-zone names,
+      derived analytical fields, data-quality flags,
+      and rejection reasons.
+
+    columns:
+      - name: trip_id
+        description: >
+          Deterministic identifier generated from selected
+          trip attributes.
+        tests:
+          - not_null
+
+      - name: trip_duration_minutes
+        description: >
+          Difference between drop-off and pickup timestamps
+          measured in minutes.
+
+      - name: rejection_reason
+        description: >
+          Reason a row is excluded from the main fact table.
+          Null indicates an accepted record.
+
+      - name: is_financial_adjustment
+        description: >
+          Indicates that the fare or total amount is negative.
+
+      - name: is_zero_distance
+        description: >
+          Indicates that the recorded trip distance is zero.

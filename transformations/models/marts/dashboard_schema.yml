@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: Calendar attributes for trip pickup dates.
+
+    columns:
+      - name: date_key
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_zone
+    description: Official NYC TLC taxi-zone dimension.
+
+    columns:
+      - name: zone_key
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_payment_type
+    description: Human-readable payment-type dimension.
+
+    columns:
+      - name: payment_type_key
+        tests:
+          - not_null
+          - unique
+
+      - name: payment_type_name
+        tests:
+          - not_null
+
+  - name: mart_daily_performance
+    description: Daily taxi demand and performance metrics.
+
+    columns:
+      - name: pickup_date
+        tests:
+          - not_null
+          - unique
+
+      - name: standard_trip_count
+        tests:
+          - not_null
+
+  - name: mart_hourly_demand
+    description: Demand summarized by weekday and pickup hour.
+
+    columns:
+      - name: pickup_weekday
+        tests:
+          - not_null
+
+      - name: pickup_hour
+        tests:
+          - not_null
+
+  - name: mart_zone_performance
+    description: Trip and revenue metrics by pickup zone.
+
+    columns:
+      - name: pickup_location_id
+        tests:
+          - not_null
+          - unique
+
+  - name: mart_payment_summary
+    description: Trip and financial metrics by payment type.
+
+    columns:
+      - name: payment_type
+        tests:
+          - not_null
+          - unique

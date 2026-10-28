@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.duckdb
+*.duckdb.wal
+.DS_Store
+
+data/raw/*
+data/rejected/*
+data/warehouse/*
+
+transformations/target
+transformations/logs
+transformations/dbt_packages

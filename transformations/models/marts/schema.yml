@@ -1,0 +1,50 @@
+version: 2
+
+models:
+  - name: fact_trips
+    description: >
+      Accepted January 2025 Yellow Taxi trips enriched
+      with zone information, derived fields, and
+      analytical quality flags.
+
+    columns:
+      - name: trip_id
+        description: Deterministic trip identifier.
+        tests:
+          - not_null
+
+      - name: pickup_datetime
+        description: Trip pickup timestamp.
+        tests:
+          - not_null
+
+      - name: dropoff_datetime
+        description: Trip drop-off timestamp.
+        tests:
+          - not_null
+
+      - name: pickup_zone
+        description: Human-readable pickup zone.
+        tests:
+          - not_null
+
+      - name: dropoff_zone
+        description: Human-readable drop-off zone.
+        tests:
+          - not_null
+
+      - name: rejection_reason
+        description: >
+          Must be null for every row in the accepted
+          fact table.
+
+  - name: rejected_trips
+    description: >
+      Trip records excluded from the accepted fact table,
+      together with their rejection reasons.
+
+    columns:
+      - name: rejection_reason
+        description: Reason the record was rejected.
+        tests:
+          - not_null
