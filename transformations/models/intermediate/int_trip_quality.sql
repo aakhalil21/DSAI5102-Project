@@ -138,10 +138,10 @@ enriched as (
 
         case
             when date_diff(
-                'minute',
+                'second',
                 trips.pickup_datetime,
                 trips.dropoff_datetime
-            ) > 360
+            ) > 21600
             then true
             else false
         end as is_unusually_long_duration,

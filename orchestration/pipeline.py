@@ -103,7 +103,7 @@ def build_dbt_models():
         raise RuntimeError(
             "The dbt executable was not found."
         )
-
+    WAREHOUSE_FILE.parent.mkdir(parents=True, exist_ok=True)
     logger.info("Starting dbt build.")
 
     execute_command(
