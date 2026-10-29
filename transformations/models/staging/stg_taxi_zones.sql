@@ -2,7 +2,7 @@ with source_data as (
 
     select *
     from read_csv_auto(
-        '../data/raw/taxi_zone_lookup.csv',
+        '{{ env_var("DBT_ZONE_SOURCE", "../data/raw/taxi_zone_lookup.csv") }}',
         header = true
     )
 

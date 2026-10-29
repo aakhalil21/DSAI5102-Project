@@ -9,9 +9,10 @@ models:
 
     columns:
       - name: trip_id
-        description: Deterministic trip identifier.
+        description: Unique source-record identifier.
         tests:
           - not_null
+          - unique
 
       - name: pickup_datetime
         description: Trip pickup timestamp.
@@ -44,6 +45,10 @@ models:
       together with their rejection reasons.
 
     columns:
+      - name: trip_id
+        tests:
+          - not_null
+          - unique
       - name: rejection_reason
         description: Reason the record was rejected.
         tests:

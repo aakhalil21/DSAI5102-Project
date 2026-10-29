@@ -4,6 +4,6 @@ taxi_pipeline:
   outputs:
     dev:
       type: duckdb
-      path: ../data/warehouse/nyc_taxi.duckdb
+      path: "{{ env_var('DBT_WAREHOUSE_PATH', '../data/warehouse/nyc_taxi_candidate.duckdb') }}"
       schema: main
       threads: 4

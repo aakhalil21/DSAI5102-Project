@@ -30,25 +30,27 @@ models:
       at this staging layer.
 
     columns:
-      - name: pickup_datetime
-        description: Recorded trip pickup timestamp.
+      - name: trip_id
         tests:
           - not_null
+          - unique
+      - name: source_filename
+        tests:
+          - not_null
+      - name: source_row_number
+        tests:
+          - not_null
+      - name: pickup_datetime
+        description: Recorded trip pickup timestamp.
 
       - name: dropoff_datetime
         description: Recorded trip drop-off timestamp.
-        tests:
-          - not_null
 
       - name: pickup_location_id
         description: TLC identifier for the pickup zone.
-        tests:
-          - not_null
 
       - name: dropoff_location_id
         description: TLC identifier for the drop-off zone.
-        tests:
-          - not_null
 
       - name: trip_distance
         description: Recorded trip distance in miles.

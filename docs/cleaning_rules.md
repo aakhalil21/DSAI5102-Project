@@ -23,7 +23,8 @@ The January 2025 model will include records where:
 - Pickup timestamp is on or after 2025-01-01 00:00:00
 - Pickup timestamp is before 2025-02-01 00:00:00
 
-Records outside this period will be excluded from the January analytical model but retained in the raw source file.
+Records outside this period are retained in rejected_trips with the
+pickup_outside_january_2025 reason.
 
 ## Timestamp rules
 
@@ -33,7 +34,8 @@ A trip requires:
 - A non-null drop-off timestamp
 - A drop-off timestamp later than the pickup timestamp
 
-Trip duration will be calculated in minutes.
+Trip duration is calculated as elapsed seconds divided by 60. A trip is
+flagged unusually long when elapsed seconds exceed 21,600.
 
 Trips with a duration greater than six hours will be retained in staging but flagged as unusually long. They will be excluded from ordinary trip-duration averages.
 
@@ -71,10 +73,22 @@ Negative fare and total amounts may represent refunds, corrections, or reversed 
 
 These records will not be deleted from staging. They will be classified as financial adjustments and excluded from ordinary fare and revenue KPIs.
 
-Standard fare and revenue analysis will use records where:
+Standard dashboard and summary metrics use accepted records where:
 
 - Fare amount is greater than or equal to zero
 - Total amount is greater than or equal to zero
+- Neither amount is missing. Zero amounts remain eligible.
+
+Daily accepted counts include all accepted records, including financial
+adjustments and records missing financial amounts. Standard counts and
+recorded charges use only eligible records. Recorded charges are
+passenger charges, not profit, and cash tips are absent from the source
+tip field.
+Payment code 0 is labeled "Flex Fare trip".
+
+Each accepted or rejected row represents one physical Parquet source
+row. The source filename and file row number form its stable identity.
+Identical content gets a duplicate flag, but no row is dropped.
 
 ## Derived fields
 

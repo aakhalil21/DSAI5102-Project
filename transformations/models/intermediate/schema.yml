@@ -10,10 +10,11 @@ models:
     columns:
       - name: trip_id
         description: >
-          Deterministic identifier generated from selected
-          trip attributes.
+          Deterministic identifier generated from source filename
+          and Parquet file row number.
         tests:
           - not_null
+          - unique
 
       - name: trip_duration_minutes
         description: >

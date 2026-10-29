@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import duckdb
@@ -8,12 +9,10 @@ import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-DATABASE_FILE = (
-    PROJECT_ROOT
-    / "data"
-    / "warehouse"
-    / "nyc_taxi.duckdb"
-)
+DATABASE_FILE = Path(os.getenv(
+    "DASHBOARD_WAREHOUSE_PATH",
+    str(PROJECT_ROOT / "data" / "warehouse" / "nyc_taxi.duckdb"),
+))
 
 
 st.set_page_config(
@@ -24,7 +23,7 @@ st.set_page_config(
 
 
 @st.cache_data(ttl=300)
-def run_query(sql, parameters=()):
+def _cached_query(sql, parameters, warehouse_version):
     """Run a read-only DuckDB query."""
 
     connection = duckdb.connect(
@@ -41,6 +40,12 @@ def run_query(sql, parameters=()):
         connection.close()
 
     return result
+
+
+def run_query(sql, parameters=()):
+    # A replaced warehouse has a new file version, so cached queries refresh.
+    version = DATABASE_FILE.stat().st_mtime_ns
+    return _cached_query(sql, tuple(parameters), version)
 
 
 if not DATABASE_FILE.exists():
@@ -69,17 +74,25 @@ st.markdown(
 )
 
 
-date_limits = run_query(
+try:
+    date_limits = run_query(
     """
     select
         min(pickup_date) as minimum_date,
         max(pickup_date) as maximum_date
     from main.fact_trips
     """
-)
+    )
+except (duckdb.Error, OSError) as error:
+    st.error(f"The warehouse could not be read: {error}")
+    st.stop()
 
 minimum_date = date_limits.loc[0, "minimum_date"]
 maximum_date = date_limits.loc[0, "maximum_date"]
+
+if pd.isna(minimum_date) or pd.isna(maximum_date):
+    st.info("The warehouse has no accepted trips to display.")
+    st.stop()
 
 
 borough_data = run_query(
@@ -253,7 +266,6 @@ with left_chart:
 
     st.plotly_chart(
         daily_trip_figure,
-        use_container_width=True,
     )
 
 with right_chart:
@@ -276,7 +288,6 @@ with right_chart:
 
     st.plotly_chart(
         daily_revenue_figure,
-        use_container_width=True,
     )
 
 
@@ -327,7 +338,11 @@ hourly_pivot = hourly_pivot.reindex(
 hourly_pivot = hourly_pivot.fillna(0)
 
 
-st.subheader("Demand by weekday and pickup hour")
+st.subheader("Total trips by weekday and pickup hour")
+st.caption(
+    "Each cell totals trips across the selected dates. The number of "
+    "occurrences of each weekday can differ within that period."
+)
 
 heatmap = px.imshow(
     hourly_pivot,
@@ -342,7 +357,6 @@ heatmap = px.imshow(
 
 st.plotly_chart(
     heatmap,
-    use_container_width=True,
 )
 
 
@@ -401,7 +415,6 @@ with left_chart:
 
     st.plotly_chart(
         borough_figure,
-        use_container_width=True,
     )
 
 with right_chart:
@@ -424,7 +437,6 @@ with right_chart:
 
     st.plotly_chart(
         zone_figure,
-        use_container_width=True,
     )
 
 
@@ -479,7 +491,6 @@ with left_chart:
 
     st.plotly_chart(
         payment_figure,
-        use_container_width=True,
     )
 
 with right_chart:
@@ -496,7 +507,6 @@ with right_chart:
 
     st.dataframe(
         display_payment_data,
-        use_container_width=True,
         hide_index=True,
     )
 

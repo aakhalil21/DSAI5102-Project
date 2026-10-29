@@ -5,8 +5,7 @@ Trip Records and the official Taxi Zone Lookup Table.
 
 ## Current scope
 
-The pipeline currently processes January 2025.
-The planned final scope is January-June 2025.
+The pipeline processes January 2025.
 
 ## Tools
 
@@ -26,8 +25,9 @@ The planned final scope is January-June 2025.
 4. Build staging models and apply documented quality rules.
 5. Create accepted and rejected trip tables.
 6. Build dimensions and analytical summaries.
-7. Run dbt tests and warehouse checks.
-8. Display results through the dashboard.
+7. Run dbt tests and warehouse checks against a candidate DuckDB file.
+8. Publish the candidate only after every check succeeds.
+9. Display results through the dashboard.
 
 ## Project folders
 
@@ -45,7 +45,8 @@ rejected_trips table.
 
 ## Requirements
 
-Install Git and Docker Desktop.
+Install Git and Docker Desktop. The image uses Python 3.11.14 and
+the versions pinned in requirements.txt.
 Keep Docker Desktop running when executing the commands below.
 
 A separate local Python environment is not required for Docker.
@@ -55,10 +56,11 @@ A separate local Python environment is not required for Docker.
 Clone the repository and open a terminal in its root folder,
 where docker-compose.yml is located.
 
-Run:
+Build the images and run:
 
 ```bash
-docker compose run --build --rm pipeline
+docker compose build pipeline dashboard
+docker compose run --rm pipeline
 ```
 
 The first build installs dependencies and may take several minutes.
@@ -69,7 +71,7 @@ Wait for the pipeline to complete successfully.
 After the pipeline succeeds, run:
 
 ```bash
-docker compose up --build -d dashboard
+docker compose up -d dashboard
 ```
 
 Open http://localhost:8501 in your browser.
@@ -85,20 +87,31 @@ Stop the dashboard before updating the warehouse:
 docker compose stop dashboard
 ```
 
-Rebuild and run the pipeline:
+Rebuild the images and run the pipeline:
 
 ```bash
-docker compose run --build --rm pipeline
+docker compose build pipeline dashboard
+docker compose run --rm pipeline
 ```
 
-Only after it succeeds, rebuild and start the dashboard:
+Only after it succeeds, restart the dashboard:
 
 ```bash
-docker compose up --build -d dashboard
+docker compose up -d dashboard
 ```
 
 The Docker images contain copies of the source code, so rebuild
 the relevant service after changing its code.
+The pipeline builds data/warehouse/nyc_taxi_candidate.duckdb,
+closes and checkpoints it, then replaces the published file. A failed
+build or test leaves nyc_taxi.duckdb intact. Keep the dashboard stopped
+during publication, especially on Windows, where an open DuckDB file
+can block replacement. If a run crashes, check that no pipeline is
+running before removing data/warehouse/.pipeline.lock. Rerun the
+pipeline to discard its incomplete candidate. dbt build itself is
+not an all-or-nothing transaction.
+Running dbt directly targets the candidate file; only the Prefect
+pipeline validates and publishes it.
 
 ## Stop the services
 
@@ -111,6 +124,16 @@ The local data files remain in the project's data folder.
 ## Data-quality and metric definitions
 
 - Raw source files are preserved unchanged.
+- Existing source files are checked for schema and readability. An
+  unusable file is renamed with an .invalid timestamp before a fresh
+  download. data/raw/source_manifest.json records names, row counts,
+  byte sizes, source URLs and SHA-256 checksums. Individual bad trip
+  rows are classified by dbt rather than treated as source failure.
+- The fact-table grain is one physical Parquet source row. trip_id is
+  based on source filename and file row number, so it remains stable
+  while the source bytes and name remain the same. A content fingerprint
+  and duplicate flag identify identical records; duplicates remain
+  separate accepted or rejected rows and are never silently dropped.
 - Invalid records are retained in rejected_trips with a reason.
 - Unusual records may be retained with quality flags.
 - Records with missing or negative fare or total amounts are
@@ -118,6 +141,7 @@ The local data files remain in the project's data folder.
 - Missing financial amounts are not replaced with zero.
 - Recorded charges represent passenger charges, not profit.
 - Cash tips are not captured in the source tip field.
+- Payment code 0 is labeled "Flex Fare trip".
 - Average distance excludes zero-distance trips and trips
   exceeding 100 miles.
 - Average duration excludes trips exceeding six hours.
@@ -137,6 +161,9 @@ Checks include:
 - Rejection reasons for rejected records
 - Source count equals accepted plus rejected counts
 - Correct missing-financial and adjustment flags
+- Source IDs appear exactly once across accepted and rejected outputs
+- Daily, hourly, zone and payment counts and charges reconcile to
+  eligible fact rows, with a $0.01 tolerance for floating-point totals
 
 Passing tests confirms the implemented checks; it does not
 guarantee that every source value is accurate.
@@ -154,9 +181,6 @@ passwords, .env files or generated dbt output.
 
 ## Remaining work
 
-- Expand the pipeline to January-June 2025.
-- Strengthen source-file validation and duplicate handling.
-- Protect the last successful warehouse if a build fails.
 - Add congestion-fee and fare/trip relationship analysis.
 - Complete the report and presentation.
 

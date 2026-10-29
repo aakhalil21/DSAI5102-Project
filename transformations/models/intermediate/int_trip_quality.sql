@@ -22,47 +22,9 @@ dropoff_zones as (
 enriched as (
 
     select
-        md5(
-            concat_ws(
-                '|',
-                coalesce(
-                    cast(trips.vendor_id as varchar),
-                    'null'
-                ),
-                coalesce(
-                    cast(
-                        trips.pickup_datetime as varchar
-                    ),
-                    'null'
-                ),
-                coalesce(
-                    cast(
-                        trips.dropoff_datetime as varchar
-                    ),
-                    'null'
-                ),
-                coalesce(
-                    cast(
-                        trips.pickup_location_id as varchar
-                    ),
-                    'null'
-                ),
-                coalesce(
-                    cast(
-                        trips.dropoff_location_id as varchar
-                    ),
-                    'null'
-                ),
-                coalesce(
-                    cast(
-                        trips.total_amount as varchar
-                    ),
-                    'null'
-                )
-            )
-        ) as trip_id,
-
         trips.*,
+        count(*) over (partition by trips.content_fingerprint) > 1
+            as is_duplicate_content,
 
         pickup_zones.borough
             as pickup_borough,

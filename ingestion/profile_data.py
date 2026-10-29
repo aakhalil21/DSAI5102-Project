@@ -146,10 +146,10 @@ def main():
             ),
             COUNT_IF(
                 DATE_DIFF(
-                    'minute',
+                    'second',
                     tpep_pickup_datetime,
                     tpep_dropoff_datetime
-                ) > 360
+                ) > 21600
             ),
             COUNT_IF(
                 tpep_pickup_datetime
