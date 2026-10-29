@@ -16,6 +16,7 @@ COPY orchestration ./orchestration
 COPY transformations ./transformations
 COPY docs ./docs
 COPY dashboard ./dashboard
+COPY .streamlit ./.streamlit
 COPY tests ./tests
 EXPOSE 8501
 CMD ["python", "orchestration/pipeline.py"]

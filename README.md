@@ -77,7 +77,9 @@ docker compose up -d dashboard
 Open http://localhost:8501 in your browser.
 
 Use the pickup-date range and pickup-borough filters
-to explore the results.
+to explore the results. The sidebar's Reset filters button returns to
+the full month and all boroughs. Recorded charges may be displayed in
+millions when large; the KPI help tooltip shows the exact amount.
 
 ## Rebuild after changes
 
