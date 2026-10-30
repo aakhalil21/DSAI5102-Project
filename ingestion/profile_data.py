@@ -191,10 +191,10 @@ def main():
             AVG(total_amount),
             AVG(
                 DATE_DIFF(
-                    'minute',
+                    'second',
                     tpep_pickup_datetime,
                     tpep_dropoff_datetime
-                )
+                ) / 60.0
             )
         FROM raw_trips
         WHERE
@@ -329,9 +329,10 @@ def main():
     report.append("## Notes")
     report.append("")
     report.append(
-        "These results describe the raw source data. "
-        "The cleaning rules will be selected after "
-        "reviewing these findings."
+        "These averages describe raw rows with ordered timestamps, "
+        "non-negative distance, fare, and total amounts. They are not "
+        "dashboard KPIs: the dashboard applies project-period, location, "
+        "financial-eligibility, and metric-specific filters to accepted trips."
     )
 
     REPORT_FILE.parent.mkdir(

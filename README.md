@@ -33,7 +33,7 @@ The verified six-month build processes 24,083,384 source rows:
 - 23,886,241 accepted trips
 - 197,143 rejected trips
 - 181 daily summary rows
-- 55 passing dbt checks
+- 12 successful dbt model builds and 43 passing dbt data tests
 - 11 passing focused Python tests
 
 ## Tools
@@ -104,6 +104,11 @@ The warehouse uses a fact-and-dimension design:
 - `mart_zone_performance`: trip and charge summaries by pickup zone.
 - `mart_payment_summary`: trip and financial metrics by payment method.
 
+The dashboard currently queries filtered `fact_trips` directly for its
+KPIs and charts. The marts provide separately tested analytical summaries;
+the dashboard does not read them. This keeps interactive date and borough
+filters consistent across dashboard views.
+
 Stable trip IDs use source filename plus physical row number. This keeps
 identical-content source records separate while preserving traceability.
 
@@ -161,11 +166,21 @@ Build the images and run:
 
 ```bash
 docker compose build pipeline dashboard
+docker compose run --rm pipeline python tests/synthetic_fixture.py
+docker compose stop dashboard
 docker compose run --rm pipeline
+docker compose run --rm pipeline python -m unittest discover -s tests -p 'test_*.py'
+docker compose run --rm pipeline python tests/verify_warehouse.py
 ```
 
 The first build installs dependencies and may take several minutes.
 Wait for the pipeline to complete successfully.
+The synthetic fixture builds into a temporary database and uses no real TLC
+download. Stop the dashboard before publishing the new warehouse, including
+on Windows. The focused Python tests and warehouse verification run against
+the completed published warehouse. `dbt build` writes its full results to
+`data/verification/dbt-target/run_results.json` and its logs to
+`data/verification/dbt-logs/`; both remain local and are ignored by Git.
 
 ## Start the dashboard
 
@@ -224,6 +239,16 @@ docker compose down
 
 The local data files remain in the project's data folder.
 
+## Verification evidence
+
+The final run saves a concise summary and machine-readable details in
+`docs/verification/`. The full pipeline log and generated dbt artifacts
+remain under ignored `data/verification/` for independent review. The
+summary records the starting commit and a fingerprint of the modified
+source files used in the Docker image. The starting commit by itself does
+not identify the tested working tree. See
+`docs/verification/README.md` for the commands and evidence scope.
+
 ## Data-quality and metric definitions
 
 - Raw source files are preserved unchanged.
@@ -249,6 +274,10 @@ The local data files remain in the project's data folder.
   exceeding 100 miles.
 - Average duration excludes trips exceeding six hours.
 - Trip duration is calculated in seconds divided by 60.
+- The profiling report describes raw rows with ordered timestamps and
+  nonnegative distance, fare, and total amounts. Its averages do not apply
+  the dashboard's project-period, location, financial-eligibility, and
+  metric-specific filters and therefore can differ from dashboard KPIs.
 - Trips measure recorded activity, not unmet taxi demand.
 
 See docs/cleaning_rules.md for the detailed rules.
@@ -281,7 +310,8 @@ The final January-June 2025 build produced:
 - 22,560,818 financially eligible trips
 - 181 daily summary rows
 - $637,824,068.09 in eligible recorded passenger charges
-- 55 passing dbt checks and 11 passing focused Python tests
+- 12 successful dbt model builds, 43 passing dbt data tests, and 11 passing
+  focused Python tests
 
 Initial dashboard findings include:
 

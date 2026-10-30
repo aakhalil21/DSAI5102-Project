@@ -66,4 +66,4 @@
 
 ## Notes
 
-These results describe the raw source data. The cleaning rules will be selected after reviewing these findings.
+These averages describe raw rows with ordered timestamps, non-negative distance, fare, and total amounts. They are not dashboard KPIs: the dashboard applies project-period, location, financial-eligibility, and metric-specific filters to accepted trips.

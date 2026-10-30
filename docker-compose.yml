@@ -9,6 +9,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./docs:/app/docs
+      - ./data/verification/dbt-target:/app/transformations/target
+      - ./data/verification/dbt-logs:/app/transformations/logs
 
     environment:
       PREFECT_LOGGING_LEVEL: INFO

@@ -1,0 +1,122 @@
+{
+  "timestamp_utc": "2026-10-30T13:59:30Z",
+  "starting_commit": "ce9d05adfd944468a38a4658fc07dc40fcae892d",
+  "branch": "fix/final-verification",
+  "starting_tree_clean": true,
+  "code_fingerprint_sha256": "8b0622a0a95498104054611355adc7a762afd81431ef4d64bfad7a463fec79e3",
+  "code_fingerprint_note": "Hash of relevant modified source and config files copied into the image for the full pipeline run. A later dashboard-only tick-spacing change has a separate fingerprint in dashboard_only_followup; the starting commit alone does not identify either tested tree.",
+  "dashboard_only_followup": {
+    "reviewed_at_utc": "2026-10-30T19:55:46Z",
+    "source_fingerprint_sha256": "c80ed6715d92919c3e6d3b6cfcd551c75c127b9e51351f85707fd83928b7f6b4",
+    "dashboard_app_sha256": "ee36aa74fa0d51f5d0761f12169ba42c49deefd4c56ad9e388ed65fb9728e9a6",
+    "dashboard_tests_passed": 4,
+    "dashboard_health": "ok",
+    "browser_review": "docs/verification/browser_review.md"
+  },
+  "runtime": {
+    "python": "3.11.14",
+    "dbt-core": "1.10.23",
+    "dbt-duckdb": "1.10.0",
+    "duckdb": "1.4.5",
+    "streamlit": "1.50.0",
+    "prefect": "2.20.27",
+    "pyarrow": "21.0.0"
+  },
+  "sources": [
+    {
+      "month": "2025-01",
+      "filename": "yellow_tripdata_2025-01.parquet",
+      "source": 3475226,
+      "accepted": 3473154,
+      "rejected": 2072,
+      "reconciled": true,
+      "source_url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-01.parquet",
+      "size_bytes": 59158238,
+      "sha256": "9af277e4c0d3f9deb30644da822981e1e7df6af58313170fd3aa8a474485488a"
+    },
+    {
+      "month": "2025-02",
+      "filename": "yellow_tripdata_2025-02.parquet",
+      "source": 3577543,
+      "accepted": 3572379,
+      "rejected": 5164,
+      "reconciled": true,
+      "source_url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-02.parquet",
+      "size_bytes": 60343086,
+      "sha256": "037cba555a73663f3a51a2c27816e40e3feb364769942bdf122b9da31e377bd3"
+    },
+    {
+      "month": "2025-03",
+      "filename": "yellow_tripdata_2025-03.parquet",
+      "source": 4145257,
+      "accepted": 4122975,
+      "rejected": 22282,
+      "reconciled": true,
+      "source_url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-03.parquet",
+      "size_bytes": 69964745,
+      "sha256": "20c4b77cce457b7cfdae77c5069ca7dc91c167f876a41467f4502ab69487a186"
+    },
+    {
+      "month": "2025-04",
+      "filename": "yellow_tripdata_2025-04.parquet",
+      "source": 3970553,
+      "accepted": 3935784,
+      "rejected": 34769,
+      "reconciled": true,
+      "source_url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-04.parquet",
+      "size_bytes": 67352824,
+      "sha256": "6f98938de9380a3f85600533816f0dc0e6d9b5b210e485d623952bac599bbe28"
+    },
+    {
+      "month": "2025-05",
+      "filename": "yellow_tripdata_2025-05.parquet",
+      "source": 4591845,
+      "accepted": 4527572,
+      "rejected": 64273,
+      "reconciled": true,
+      "source_url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-05.parquet",
+      "size_bytes": 77837865,
+      "sha256": "7ef46bcd0fceee7f8c0bb38a532be05bceefabb512d4bb0b32a7727dd862b15c"
+    },
+    {
+      "month": "2025-06",
+      "filename": "yellow_tripdata_2025-06.parquet",
+      "source": 4322960,
+      "accepted": 4254377,
+      "rejected": 68583,
+      "reconciled": true,
+      "source_url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-06.parquet",
+      "size_bytes": 73542954,
+      "sha256": "1bea7f5b09c744414451fa7fef09fbc5a393ffb1621c859be6ba0df23a14e1b6"
+    }
+  ],
+  "taxi_zone_source": {
+    "filename": "taxi_zone_lookup.csv",
+    "source_url": "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv",
+    "rows": 265,
+    "size_bytes": 12331,
+    "sha256": "1a99e105092230f8620f301edcca7f80d3080642ff404d28ed957d3fa222c8ed"
+  },
+  "totals": {
+    "source": 24083384,
+    "accepted": 23886241,
+    "rejected": 197143
+  },
+  "reconciliation": "all six files and total reconcile exactly",
+  "dbt": {
+    "generated_at": "2026-10-30T12:53:10.697098Z",
+    "counts": {
+      "model_success": 12,
+      "test_pass": 43
+    },
+    "failures": []
+  },
+  "warehouse": {
+    "eligible_rows": 22560818,
+    "eligible_recorded_charges": 637824068.0900049,
+    "daily_rows": 181,
+    "first_day": "2025-01-01",
+    "last_day": "2025-06-30",
+    "duplicate_trip_ids": 0
+  }
+}

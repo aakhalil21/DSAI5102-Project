@@ -2,23 +2,29 @@
 
 ## Purpose
 
-This document defines the initial rules used to transform raw NYC Yellow Taxi trip records into analytics-ready data.
+This document defines the rules used to transform raw NYC Yellow Taxi trip records into analytics-ready data.
 
-The raw source files will never be modified. Cleaning rules will be applied only when creating staging and analytical models.
+The pipeline preserves the raw source files unchanged. Cleaning rules apply when creating staging and analytical models.
+
+The raw profiling report averages rows with ordered pickup and drop-off
+timestamps and nonnegative distance, fare, and total amounts. Its averages
+do not apply the accepted-trip, project-period, known-location, financial
+eligibility, and metric-specific filters used by dashboard KPIs, so the
+two sets of averages can differ.
 
 ## General approach
 
-Records will be classified into three groups:
+Records are classified into three groups:
 
 1. Valid trips suitable for general analysis
 2. Valid but special-case trips requiring flags
 3. Rejected trips that cannot support reliable analysis
 
-The pipeline will preserve counts of rejected and flagged records so that data-quality decisions remain transparent.
+The pipeline preserves counts of rejected and flagged records so that data-quality decisions remain transparent.
 
 ## Date scope
 
-The January-June 2025 model will include records where:
+The January-June 2025 model accepts records where:
 
 - Pickup timestamp is on or after 2025-01-01 00:00:00
 - Pickup timestamp is before 2025-07-01 00:00:00
@@ -37,7 +43,7 @@ A trip requires:
 Trip duration is calculated as elapsed seconds divided by 60. A trip is
 flagged unusually long when elapsed seconds exceed 21,600.
 
-Trips with a duration greater than six hours will be retained in staging but flagged as unusually long. They will be excluded from ordinary trip-duration averages.
+Trips with a duration greater than six hours remain in staging and are flagged as unusually long. They are excluded from ordinary trip-duration averages.
 
 ## Location rules
 
@@ -51,27 +57,27 @@ The initial profile found no unmatched pickup or drop-off zones.
 
 ## Passenger-count rules
 
-Missing passenger counts will not cause a trip to be rejected.
+A missing passenger count does not cause a trip to be rejected.
 
-A missing passenger count will remain null and will be identified using a passenger-count-missing flag.
+A missing passenger count remains null and is identified using a passenger-count-missing flag.
 
-Passenger counts above eight will be retained but flagged as unusual.
+Passenger counts above eight are retained but flagged as unusual.
 
-Passenger-count analysis will use only non-null and reasonable values.
+Passenger-count analysis uses only non-null and reasonable values.
 
 ## Distance rules
 
-Negative trip distances will be rejected.
+Negative trip distances are rejected.
 
-Zero-distance trips will be retained and flagged. They will be excluded from analyses requiring a meaningful distance, such as fare per mile or average speed.
+Zero-distance trips are retained and flagged. They are excluded from analyses requiring a meaningful distance, such as fare per mile or average speed.
 
-Trips above 100 miles will be retained in staging but flagged as unusually long. They will be excluded from ordinary distance averages until manually reviewed.
+Trips above 100 miles are retained in staging but flagged as unusually long. They are excluded from ordinary distance averages.
 
 ## Financial rules
 
 Negative fare and total amounts may represent refunds, corrections, or reversed transactions.
 
-These records will not be deleted from staging. They will be classified as financial adjustments and excluded from ordinary fare and revenue KPIs.
+These records remain in staging. They are classified as financial adjustments and excluded from ordinary fare and recorded-charge KPIs.
 
 Standard dashboard and summary metrics use accepted records where:
 
@@ -92,7 +98,7 @@ A content fingerprint identifies identical content, but no row is dropped.
 
 ## Derived fields
 
-The transformation will create:
+The transformation creates:
 
 - Pickup date
 - Pickup year
@@ -111,32 +117,30 @@ The transformation will create:
 - Unusually-long-duration indicator
 - Unusually-long-distance indicator
 
-Fare per mile will be calculated only when trip distance is greater than zero.
+Fare per mile is calculated only when trip distance is greater than zero and fare is nonnegative.
 
-Average speed will be calculated only when distance and duration are both greater than zero.
+Average speed is calculated only when distance and duration are both greater than zero.
 
-Tip percentage will be calculated only when fare amount is greater than zero.
+Tip percentage is calculated only when fare amount is greater than zero and tip amount is nonnegative.
 
 ## Rejected-record policy
 
-A record will be rejected from the main analytical fact table when:
+A record is rejected from the main analytical fact table when:
 
 - Pickup timestamp is missing
 - Drop-off timestamp is missing
 - Drop-off is not later than pickup
-- Pickup timestamp is outside the selected monthly period
+- Pickup timestamp is before 2025-01-01 or on or after 2025-07-01
 - Pickup location ID is missing
 - Drop-off location ID is missing
 - Pickup or drop-off location is absent from the official lookup table
 - Trip distance is negative
 
-Rejected records will remain available in a separate rejected-record model with a rejection reason.
+Rejected records remain available in a separate rejected-record model with a rejection reason. A June 30 pickup ending in July remains in scope because the period rule uses pickup time.
 
 ## Review policy
 
-These rules are initial decisions based on January-June 2025 profiling results.
-
-They may be refined after inspecting distributions, reviewing official data documentation, and comparing additional months. Any changes will be recorded in this document.
+These are the implemented January-June 2025 rules. Changes to them must be recorded here.
 
 ## Missing financial values
 

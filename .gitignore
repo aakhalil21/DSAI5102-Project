@@ -29,6 +29,7 @@ docker-compose.override.yml
 # Generated warehouse - keep only the folder placeholder
 /data/warehouse/*
 !/data/warehouse/.gitkeep
+/data/verification/
 
 # DuckDB databases and temporary files
 *.duckdb

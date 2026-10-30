@@ -632,7 +632,8 @@ hourly_pivot = hourly_data.pivot(
 )
 
 hourly_pivot = hourly_pivot.reindex(
-    weekday_order
+    index=weekday_order,
+    columns=range(24),
 )
 
 hourly_pivot = hourly_pivot.fillna(0)
@@ -663,7 +664,7 @@ heatmap.update_layout(margin=dict(l=18, r=22, t=44, b=30))
 heatmap.update_traces(
     hovertemplate="%{y} · %{x}:00<br>%{z:,.0f} trips<extra></extra>",
 )
-heatmap.update_xaxes(title=None, dtick=2)
+heatmap.update_xaxes(title=None, dtick=4)
 heatmap.update_yaxes(title=None, showgrid=False)
 
 st.plotly_chart(
@@ -690,6 +691,7 @@ borough_summary = run_query(
 zone_summary = run_query(
     """
     select
+        pickup_location_id,
         pickup_zone,
         pickup_borough,
         count(*) as trip_count,
@@ -697,6 +699,7 @@ zone_summary = run_query(
     from main.fact_trips
     where {}
     group by
+        pickup_location_id,
         pickup_zone,
         pickup_borough
     order by trip_count desc
@@ -755,16 +758,22 @@ with left_chart:
 with right_chart:
     st.markdown("**Top 10 pickup zones**")
 
+    repeated_zone_name = zone_summary["pickup_zone"].duplicated(keep=False)
+    zone_summary["zone_label"] = zone_summary["pickup_zone"].where(
+        ~repeated_zone_name,
+        zone_summary["pickup_zone"]
+        + " (#" + zone_summary["pickup_location_id"].astype(str) + ")",
+    )
     ranked_zones = zone_summary.sort_values("trip_count", ascending=True)
     zone_figure = px.bar(
         ranked_zones,
         x="trip_count",
-        y="pickup_zone",
+        y="zone_label",
         orientation="h",
         color_discrete_sequence=[BLUE],
-        custom_data=["pickup_borough"],
+        custom_data=["pickup_zone", "pickup_borough", "pickup_location_id"],
         labels={
-            "pickup_zone": "Pickup zone",
+            "zone_label": "Pickup zone",
             "trip_count": "Trips",
             "pickup_borough": "Borough",
         },
@@ -777,8 +786,8 @@ with right_chart:
             for borough in ranked_zones["pickup_borough"]
         ],
         hovertemplate=(
-            "%{y}<br>%{x:,.0f} trips<br>Pickup borough: "
-            "%{customdata[0]}<extra></extra>"
+            "%{customdata[0]} (#%{customdata[2]})<br>%{x:,.0f} trips"
+            "<br>Pickup borough: %{customdata[1]}<extra></extra>"
         ),
     )
     zone_figure.update_xaxes(title=None, rangemode="tozero", tickformat="~s")
@@ -786,7 +795,7 @@ with right_chart:
         title=None,
         showgrid=False,
         categoryorder="array",
-        categoryarray=ranked_zones["pickup_zone"].tolist(),
+        categoryarray=ranked_zones["zone_label"].tolist(),
     )
 
     st.plotly_chart(
