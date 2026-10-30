@@ -285,7 +285,7 @@ def run_query(sql, parameters=()):
 
 if not DATABASE_FILE.exists():
     st.error(
-        "The January warehouse is unavailable. Run the pipeline, "
+        "The project warehouse is unavailable. Run the pipeline, "
         "then refresh this page."
     )
     st.stop()
@@ -301,7 +301,7 @@ try:
     """
     )
 except (duckdb.Error, OSError) as error:
-    st.error(f"The January warehouse could not be read: {error}")
+    st.error(f"The project warehouse could not be read: {error}")
     st.stop()
 
 minimum_date = date_limits.loc[0, "minimum_date"]
@@ -328,7 +328,7 @@ borough_options = [
 
 
 st.sidebar.markdown("### Filters")
-st.sidebar.caption("January 2025 · pickup records")
+st.sidebar.caption("January-June 2025 · pickup records")
 
 if "pickup_dates" not in st.session_state:
     st.session_state.pickup_dates = (minimum_date, maximum_date)
@@ -931,5 +931,5 @@ st.caption(
 
 st.caption(
     "Source: New York City Taxi and Limousine Commission · "
-    "January 2025 Yellow Taxi Trip Records and Taxi Zone Lookup."
+    "January-June 2025 Yellow Taxi Trip Records and Taxi Zone Lookup."
 )

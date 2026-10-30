@@ -5,7 +5,15 @@ Trip Records and the official Taxi Zone Lookup Table.
 
 ## Current scope
 
-The pipeline processes January 2025.
+The pipeline processes January through June 2025.
+
+The verified six-month build processes 24,083,384 source rows:
+
+- 23,886,241 accepted trips
+- 197,143 rejected trips
+- 181 daily summary rows
+- 55 passing dbt checks
+- 11 passing focused Python tests
 
 ## Tools
 
@@ -134,8 +142,8 @@ The local data files remain in the project's data folder.
 - The fact-table grain is one physical Parquet source row. trip_id is
   based on source filename and file row number, so it remains stable
   while the source bytes and name remain the same. A content fingerprint
-  and duplicate flag identify identical records; duplicates remain
-  separate accepted or rejected rows and are never silently dropped.
+  identifies identical records; duplicates remain separate accepted or
+  rejected rows and are never silently dropped.
 - Invalid records are retained in rejected_trips with a reason.
 - Unusual records may be retained with quality flags.
 - Records with missing or negative fare or total amounts are
@@ -158,7 +166,7 @@ The pipeline runs dbt build, which builds models and runs tests.
 
 Checks include:
 - Required values and unique dimension keys
-- Valid timestamps and January date scope
+- Valid timestamps and January-June date scope
 - No negative distances in accepted trips
 - Rejection reasons for rejected records
 - Source count equals accepted plus rejected counts
@@ -183,8 +191,7 @@ passwords, .env files or generated dbt output.
 
 ## Remaining work
 
-- Add congestion-fee and fare/trip relationship analysis.
-- Complete the report and presentation.
+- Complete the final report and presentation.
 
 ## Data source
 

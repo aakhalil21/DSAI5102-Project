@@ -18,13 +18,13 @@ The pipeline will preserve counts of rejected and flagged records so that data-q
 
 ## Date scope
 
-The January 2025 model will include records where:
+The January-June 2025 model will include records where:
 
 - Pickup timestamp is on or after 2025-01-01 00:00:00
-- Pickup timestamp is before 2025-02-01 00:00:00
+- Pickup timestamp is before 2025-07-01 00:00:00
 
 Records outside this period are retained in rejected_trips with the
-pickup_outside_january_2025 reason.
+pickup_outside_project_period reason.
 
 ## Timestamp rules
 
@@ -88,7 +88,7 @@ Payment code 0 is labeled "Flex Fare trip".
 
 Each accepted or rejected row represents one physical Parquet source
 row. The source filename and file row number form its stable identity.
-Identical content gets a duplicate flag, but no row is dropped.
+A content fingerprint identifies identical content, but no row is dropped.
 
 ## Derived fields
 
@@ -134,7 +134,7 @@ Rejected records will remain available in a separate rejected-record model with 
 
 ## Review policy
 
-These rules are initial decisions based on January 2025 profiling results.
+These rules are initial decisions based on January-June 2025 profiling results.
 
 They may be refined after inspecting distributions, reviewing official data documentation, and comparing additional months. Any changes will be recorded in this document.
 

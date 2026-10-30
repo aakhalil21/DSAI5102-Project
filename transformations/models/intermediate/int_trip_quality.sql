@@ -23,9 +23,6 @@ enriched as (
 
     select
         trips.*,
-        count(*) over (partition by trips.content_fingerprint) > 1
-            as is_duplicate_content,
-
         pickup_zones.borough
             as pickup_borough,
 
@@ -179,8 +176,8 @@ enriched as (
             when trips.pickup_datetime
                 < timestamp '2025-01-01 00:00:00'
                 or trips.pickup_datetime
-                >= timestamp '2025-02-01 00:00:00'
-                then 'pickup_outside_january_2025'
+                >= timestamp '2025-07-01 00:00:00'
+                then 'pickup_outside_project_period'
 
             when trips.pickup_location_id is null
                 then 'missing_pickup_location'

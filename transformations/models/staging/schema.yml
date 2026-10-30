@@ -25,7 +25,7 @@ models:
 
   - name: stg_yellow_taxi_trips
     description: >
-      Renamed and type-standardized January 2025 Yellow
+      Renamed and type-standardized January-June 2025 Yellow
       Taxi trip records. No business filtering is applied
       at this staging layer.
 

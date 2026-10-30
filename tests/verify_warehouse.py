@@ -1,4 +1,4 @@
-"""Print a stable January warehouse signature and check dashboard filters."""
+"""Print a stable project warehouse signature and check dashboard filters."""
 
 import json
 from pathlib import Path

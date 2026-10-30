@@ -5,11 +5,11 @@ import duckdb
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-TRIP_FILE = (
+TRIP_FILE_GLOB = (
     PROJECT_ROOT
     / "data"
     / "raw"
-    / "yellow_tripdata_2025-01.parquet"
+    / "yellow_tripdata_2025-0[1-6].parquet"
 )
 
 ZONE_FILE = (
@@ -22,7 +22,7 @@ ZONE_FILE = (
 REPORT_FILE = (
     PROJECT_ROOT
     / "docs"
-    / "data_profile_january_2025.md"
+    / "data_profile_january_june_2025.md"
 )
 
 
@@ -45,11 +45,11 @@ def format_value(value):
 
 
 def main():
-    """Profile the January 2025 taxi data."""
+    """Profile the January-June 2025 taxi data."""
 
-    if not TRIP_FILE.exists():
+    if len(list((PROJECT_ROOT / "data" / "raw").glob("yellow_tripdata_2025-0[1-6].parquet"))) != 6:
         raise FileNotFoundError(
-            "Trip file not found: {}".format(TRIP_FILE)
+            "All six monthly trip files are required"
         )
 
     if not ZONE_FILE.exists():
@@ -57,7 +57,7 @@ def main():
             "Zone file not found: {}".format(ZONE_FILE)
         )
 
-    trip_path = make_sql_path(TRIP_FILE)
+    trip_path = make_sql_path(TRIP_FILE_GLOB)
     zone_path = make_sql_path(ZONE_FILE)
 
     connection = duckdb.connect()
@@ -156,7 +156,7 @@ def main():
                     < TIMESTAMP '2025-01-01'
                 OR
                 tpep_pickup_datetime
-                    >= TIMESTAMP '2025-02-01'
+                    >= TIMESTAMP '2025-07-01'
             )
         FROM raw_trips
         """
@@ -221,13 +221,13 @@ def main():
         "Passenger counts above 8",
         "Trip distances above 100 miles",
         "Trips lasting more than 6 hours",
-        "Pickup timestamps outside January 2025",
+        "Pickup timestamps outside January-June 2025",
     ]
 
     report = []
 
     report.append(
-        "# January 2025 Yellow Taxi Data Profile"
+        "# January-June 2025 Yellow Taxi Data Profile"
     )
     report.append("")
     report.append("## Dataset summary")

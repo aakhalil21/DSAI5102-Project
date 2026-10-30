@@ -6,4 +6,7 @@ taxi_pipeline:
       type: duckdb
       path: "{{ env_var('DBT_WAREHOUSE_PATH', '../data/warehouse/nyc_taxi_candidate.duckdb') }}"
       schema: main
-      threads: 4
+      threads: 1
+      settings:
+        memory_limit: "5GB"
+        preserve_insertion_order: false
