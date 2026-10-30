@@ -1,4 +1,4 @@
-"""Download and validate the two January 2025 source files."""
+"""Download and validate January-June 2025 source files."""
 
 import csv
 import hashlib
@@ -13,7 +13,11 @@ import requests
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
 DATA_FILES = {
-    "yellow_tripdata_2025-01.parquet": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-01.parquet",
+    **{
+        f"yellow_tripdata_2025-{month:02d}.parquet":
+        f"https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-{month:02d}.parquet"
+        for month in range(1, 7)
+    },
     "taxi_zone_lookup.csv": "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv",
 }
 TRIP_TYPES = {
@@ -103,11 +107,17 @@ def checksum(path):
     return digest.hexdigest()
 
 
-def download_file(url, destination):
+def download_file(url, destination, expected=None):
     """Reuse a valid file; quarantine invalid content; publish validated bytes."""
     if destination.exists():
         try:
             count = validate_file(destination)
+            current_checksum = checksum(destination)
+            if expected and expected.get("sha256") != current_checksum:
+                raise RuntimeError(
+                    f"Unexpected source change for {destination.name}: checksum does not match "
+                    "the existing manifest. Review the file before accepting a new source version."
+                )
             print(f"Validated existing {destination.name}: {count:,} rows")
             return count
         except ValueError as error:
@@ -126,6 +136,12 @@ def download_file(url, destination):
                     if chunk:
                         output.write(chunk)
         count = validate_trip_file(temporary) if destination.suffix == ".parquet" else validate_zone_file(temporary)
+        new_checksum = checksum(temporary)
+        if expected and expected.get("sha256") != new_checksum:
+            raise RuntimeError(
+                f"Downloaded source changed for {destination.name}: checksum does not match "
+                "the existing manifest. Review the upstream change before accepting it."
+            )
         temporary.replace(destination)
         print(f"Downloaded and validated {destination.name}: {count:,} rows")
         return count
@@ -135,15 +151,21 @@ def download_file(url, destination):
 
 def main():
     RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    manifest = RAW_DATA_DIR / "source_manifest.json"
+    previous = {}
+    if manifest.exists():
+        try:
+            previous = json.loads(manifest.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as error:
+            raise ValueError(f"Invalid source manifest: {manifest}") from error
     metadata = {}
     for filename, url in DATA_FILES.items():
         path = RAW_DATA_DIR / filename
-        count = download_file(url, path)
+        count = download_file(url, path, previous.get(filename))
         metadata[filename] = {
             "filename": filename, "source_url": url, "rows": count,
             "size_bytes": path.stat().st_size, "sha256": checksum(path),
         }
-    manifest = RAW_DATA_DIR / "source_manifest.json"
     temporary_manifest = manifest.with_suffix(".json.part")
     temporary_manifest.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     temporary_manifest.replace(manifest)

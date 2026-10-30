@@ -3,7 +3,7 @@ version: 2
 models:
   - name: fact_trips
     description: >
-      Accepted January 2025 Yellow Taxi trips enriched
+      Accepted January-June 2025 Yellow Taxi trips enriched
       with zone information, derived fields, and
       analytical quality flags.
 

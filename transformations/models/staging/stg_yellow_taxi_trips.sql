@@ -1,11 +1,13 @@
 with source_data as (
 
-    select *,
-        'yellow_tripdata_2025-01.parquet' as source_filename,
+    select * exclude (filename, file_row_number),
+        regexp_extract(filename, '[^/]+$') as source_filename,
         file_row_number as source_row_number,
     from read_parquet(
-        '{{ env_var("DBT_TRIP_SOURCE", "../data/raw/yellow_tripdata_2025-01.parquet") }}',
-        file_row_number = true
+        '{{ env_var("DBT_TRIP_SOURCE", "../data/raw/yellow_tripdata_2025-0[1-6].parquet") }}',
+        file_row_number = true,
+        filename = true,
+        union_by_name = true
     ) as source_data
 
 ),

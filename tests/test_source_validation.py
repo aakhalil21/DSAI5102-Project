@@ -50,6 +50,14 @@ class SourceValidationTests(unittest.TestCase):
                 get.assert_not_called()
             self.assertEqual(destination.read_bytes(), VALID_ZONES)
 
+    def test_valid_existing_file_with_changed_checksum_is_rejected(self):
+        with TemporaryDirectory() as directory:
+            destination = Path(directory) / "taxi_zone_lookup.csv"
+            destination.write_bytes(VALID_ZONES)
+            expected = {"sha256": "not-the-current-checksum"}
+            with self.assertRaises(RuntimeError):
+                download_data.download_file("unused", destination, expected)
+
     def test_corrupt_existing_file_is_quarantined_before_replacement(self):
         with TemporaryDirectory() as directory:
             destination = Path(directory) / "taxi_zone_lookup.csv"

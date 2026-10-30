@@ -74,9 +74,14 @@ def main():
         """).fetchone()
         if daily != (5, 3, 1, 20):
             raise AssertionError(daily)
-        duplicates = db.execute(
-            "select count(*) from main.fact_trips where is_duplicate_content"
-        ).fetchone()[0]
+        duplicates = db.execute("""
+            select coalesce(sum(record_count), 0) from (
+                select count(*) as record_count
+                from main.fact_trips
+                group by content_fingerprint
+                having count(*) > 1
+            )
+        """).fetchone()[0]
         if duplicates != 2:
             raise AssertionError(duplicates)
     print("Synthetic fixture passed: 5 accepted, 4 rejected, 2 duplicate-content rows, $20 eligible charges")

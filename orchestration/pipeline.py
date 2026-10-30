@@ -65,7 +65,10 @@ def validate_warehouse():
         manifest = json.loads(
             (ROOT / "data" / "raw" / "source_manifest.json").read_text(encoding="utf-8")
         )
-        source = manifest["yellow_tripdata_2025-01.parquet"]["rows"]
+        source = sum(
+            details["rows"] for filename, details in manifest.items()
+            if filename.startswith("yellow_tripdata_2025-")
+        )
         accepted = connection.execute("select count(*) from main.fact_trips").fetchone()[0]
         rejected = connection.execute("select count(*) from main.rejected_trips").fetchone()[0]
         daily = connection.execute("select count(*) from main.mart_daily_performance").fetchone()[0]
