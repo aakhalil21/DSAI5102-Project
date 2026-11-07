@@ -33,3 +33,27 @@ docker compose exec -T dashboard python -c "import urllib.request; print(urllib.
 The actual command outputs and warnings are captured in the run's local
 logs. A successful health response establishes that Streamlit is serving;
 it does not establish that every chart or interaction works.
+
+## November 2026 controlled rebuild
+
+`benchmark-2026-11-07.md` and `benchmark-2026-11-07.json` are a separate
+performance record for the current feature branch. They do not replace
+`summary.md` or `details.json`, which document the earlier October revision.
+The detailed logs, timing JSON and five-second Docker memory samples are
+under ignored `data/verification/benchmark-2026-11-07/`.
+
+From the repository root, after checking Docker capacity and building the
+images, the measured command is:
+
+```powershell
+docker compose build pipeline dashboard
+python tests/benchmark_pipeline.py --output data/verification/benchmark-2026-11-07
+```
+
+The utility stops the dashboard before the candidate can be published,
+passes an opt-in timing path to the pipeline, and records host command time
+with a monotonic clock. Stage timings are also monotonic and are saved by
+the pipeline. Its monitor samples `docker stats` every five seconds; that is
+container usage, not process memory or a guaranteed peak. The script leaves
+the dashboard stopped so that post-run verification can finish before
+`docker compose up -d dashboard`.

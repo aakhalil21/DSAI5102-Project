@@ -75,20 +75,23 @@ The project uses a batch design because the TLC publishes historical
 monthly files and the analytical use case does not require real-time
 updates.
 
-## Design choices
+## Component roles
 
-- **Python ingestion:** provides controlled downloading, validation,
-  profiling, checksums and clear error handling.
-- **Prefect:** represents the complete workflow as an observable,
-  repeatable flow rather than a collection of manual commands.
-- **dbt:** keeps transformations modular, documented and automatically
-  tested, with explicit dependencies between models.
-- **DuckDB:** is well suited to local analytical queries over Parquet and
-  supports a portable warehouse without a separate database server.
-- **Streamlit and Plotly:** provide an interactive dashboard that connects
-  directly to the analytical warehouse and is easy to run in Docker.
-- **Docker Compose:** pins the runtime and dependencies so both team
-  members and the evaluator can execute the same workflow.
+| Component | Purpose in the implemented pipeline |
+|---|---|
+| Python ingestion and source validation | Downloads the six TLC Parquet files and zone CSV when absent; scans existing files for readable content and required schema before reuse. A changed checksum against the existing manifest stops the run. |
+| Raw storage and source manifest | `data/raw/` retains source bytes. `source_manifest.json` records URLs, row counts, sizes and SHA-256 checksums for traceability and reconciliation. |
+| Python profiling | Produces descriptive raw-data profiles before the analytical quality rules are applied. |
+| Prefect orchestration | Runs source validation, profiling, dbt, candidate checks and publication in order, with task logs and failures. |
+| dbt staging and quality classification | The two staging models expose typed trip and zone inputs as views. `int_trip_quality` is a table that classifies each physical trip row and records quality and financial flags. |
+| dbt dimensions, fact and marts | Tables persist accepted `fact_trips`, `rejected_trips`, three dimensions and four tested analytical summaries. Tests check keys, partitioning and metric reconciliation. |
+| DuckDB candidate warehouse and publication | dbt builds a separate candidate file. The pipeline checks its required tables, row reconciliation and IDs, checkpoints it, then replaces the published file only after success. |
+| Streamlit and Plotly | Serve interactive KPIs and charts with pickup-date and borough filters. The dashboard reads `fact_trips` for metrics and `dim_payment_type` for payment labels. |
+| Docker Compose | Builds the pinned Python environment, mounts local data, runs the pipeline and serves the dashboard in separate services. |
+
+Staging uses views so typed source access does not duplicate the raw data in
+the warehouse. Intermediate and mart models use tables so their classified
+rows and analytical outputs are persisted for downstream tests and queries.
 
 ## Analytical data model
 
@@ -105,9 +108,10 @@ The warehouse uses a fact-and-dimension design:
 - `mart_payment_summary`: trip and financial metrics by payment method.
 
 The dashboard currently queries filtered `fact_trips` directly for its
-KPIs and charts. The marts provide separately tested analytical summaries;
-the dashboard does not read them. This keeps interactive date and borough
-filters consistent across dashboard views.
+KPIs and charts and joins `dim_payment_type` for payment labels. The marts
+are tested, reusable analytical outputs; the dashboard does not read them.
+The current marts do not all carry the date and borough detail needed to
+answer every dashboard filter combination.
 
 Stable trip IDs use source filename plus physical row number. This keeps
 identical-content source records separate while preserving traceability.
@@ -153,9 +157,25 @@ Recommended local resources for the verified six-month build:
 - At least 8 GB assigned to Docker Desktop
 - Stable internet access for the first source download
 
-On the verified Apple M4 development machine, a cached six-month rebuild
-took approximately 2-4 minutes. The first run takes longer because it
-must download the source files and build the Docker image.
+The measured local-source rebuild and its environment are recorded in
+`docs/verification/benchmark-2026-11-07.md`. A first run also needs source
+downloads and an image build, which that benchmark did not include.
+
+## Capacity and scaling
+
+The current pipeline rebuilds the selected January-June 2025 dataset on
+each run. The measured rebuild, machine and resource limits are documented
+in `docs/verification/benchmark-2026-11-07.md`; those observations establish
+sufficiency only for this tested six-month workload and environment.
+
+For several years, future incremental processing could validate new or
+changed source files and rebuild affected outputs while preserving stable
+row identity, exact source reconciliation and safe publication. Dashboard
+summaries would need enough date and borough detail to keep combined filters
+correct. Distributed processing such as Spark should be evaluated if
+measured runtime, memory, storage or workload needs exceed practical
+single-machine capacity. Several years alone do not establish that need;
+the six-month timings cannot guarantee performance at a larger size.
 
 ## Run the pipeline
 
@@ -241,12 +261,12 @@ The local data files remain in the project's data folder.
 
 ## Verification evidence
 
-The final run saves a concise summary and machine-readable details in
-`docs/verification/`. The full pipeline log and generated dbt artifacts
-remain under ignored `data/verification/` for independent review. The
-summary records the starting commit and a fingerprint of the modified
-source files used in the Docker image. The starting commit by itself does
-not identify the tested working tree. See
+The October verification is in `docs/verification/summary.md` and
+`details.json`. The separate November controlled rebuild is in
+`docs/verification/benchmark-2026-11-07.md` and its JSON companion. Each
+records its revision scope; the starting commit alone does not identify a
+modified working tree. Full logs and generated dbt artifacts remain under
+ignored `data/verification/` for independent review. See
 `docs/verification/README.md` for the commands and evidence scope.
 
 ## Data-quality and metric definitions

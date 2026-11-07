@@ -1,0 +1,103 @@
+{
+  "date": "2026-11-07",
+  "workload": "January-June 2025 full rebuild using seven validated local source files; no downloads",
+  "revision": {
+    "branch": "docs/six-month-performance-evidence",
+    "base_commit": "c923aaa77cfa0155c3a79ccddac4244fd3abac97",
+    "working_tree_modified_at_run": true,
+    "tested_image": "sha256:870beb552b1991f7b6828e1319abacae0e8f782c52f2c651205436c81164a22e",
+    "tested_image_source_fingerprint_sha256": "1e30ae8b2b78f87e665f926c19762d36c903f3c2033e0fc544f72dd164c6b0a9",
+    "fingerprint_scope": "Relevant source and config files in the built image, using tests/collect_verification.py source_fingerprint(); README and later evidence edits are excluded"
+  },
+  "environment": {
+    "host_os": "Windows 10 Pro",
+    "host_cpu": "13th Gen Intel Core i5-13400F",
+    "host_ram_bytes": 34164101120,
+    "docker_engine_version": "29.9.2",
+    "docker_engine_cpus": 16,
+    "docker_engine_memory_bytes": 16672256000,
+    "container_configured_memory_limit_bytes": 0,
+    "container_configured_memory_swap_limit_bytes": 0,
+    "container_configured_nano_cpus": 0,
+    "container_limit_note": "Zero in docker inspect means no explicit per-container cap; the Docker engine still has a finite available memory allocation",
+    "runtime": {
+      "python": "3.11.14",
+      "dbt-core": "1.10.23",
+      "dbt-duckdb": "1.10.0",
+      "duckdb": "1.4.5",
+      "streamlit": "1.50.0",
+      "prefect": "2.20.27",
+      "pyarrow": "21.0.0"
+    }
+  },
+  "pipeline": {
+    "started_utc": "2026-11-07T13:06:19.113147+00:00",
+    "finished_utc": "2026-11-07T13:10:26.319050+00:00",
+    "status": "success",
+    "clock": "time.perf_counter",
+    "host_docker_compose_command_seconds": 247.206,
+    "prefect_flow_seconds": 232.646,
+    "stages_seconds": {
+      "candidate_cleanup": 0.001,
+      "source_validation_ingestion": 18.594,
+      "profiling": 3.934,
+      "dbt_build_and_tests": 207.45,
+      "candidate_validation": 2.55,
+      "publication": 0.111
+    },
+    "source_file_reuse": {
+      "validated_existing": 7,
+      "downloaded": 0,
+      "evidence": "data/verification/benchmark-2026-11-07/pipeline.log"
+    },
+    "raw_source_bytes_including_zone_csv": 408212043,
+    "published_warehouse_bytes": 4534317056,
+    "largest_logged_dbt_operation": {
+      "name": "summary_metrics_reconciliation",
+      "seconds": 125.46
+    },
+    "memory": {
+      "scope": "Docker stats container usage, not process memory or a guaranteed peak",
+      "nominal_sampling_interval_seconds": 5,
+      "sample_count": 40,
+      "observed_sampled_max_bytes": 5525475426,
+      "process_memory": null,
+      "process_memory_unavailable_reason": "No process-level monitor was run"
+    }
+  },
+  "verification": {
+    "source_rows": 24083384,
+    "accepted_rows": 23886241,
+    "rejected_rows": 197143,
+    "financially_eligible_rows": 22560818,
+    "eligible_recorded_charges_usd_rounded": 637824068.09,
+    "daily_summary_rows": 181,
+    "reconciles": true,
+    "dbt_models_success": 12,
+    "dbt_data_tests_pass": 43,
+    "dbt_failures_or_skips": 0,
+    "focused_python_tests_pass": 11,
+    "dashboard_tests_included_in_python_11": 4,
+    "synthetic_fixture": "pass",
+    "warehouse_signature_check": "pass",
+    "dashboard_health_after_restart": "ok"
+  },
+  "dashboard": {
+    "browser_render_timings": null,
+    "browser_unavailable_reason": "Browser access host unavailable; existing Chrome window could not be attached for interaction",
+    "first_load_after_restart_seconds": null,
+    "manhattan_interaction_seconds": null,
+    "cross_month_interaction_seconds": null,
+    "reset_filters_seconds": null,
+    "fully_rendered_definition": "Would require all five KPIs, daily charts, heatmap, pickup charts and payment views to display for the selected filters; could not be observed",
+    "sql_query_scope": "Exact metrics and daily_data SQL from dashboard/app.py, each with a new read-only DuckDB connection and fetchdf; excludes Streamlit cache, Plotly, network and browser rendering; OS cache uncontrolled",
+    "sql_query_results": "data/verification/benchmark-2026-11-07/dashboard_queries.json",
+    "sql_medians_seconds": {
+      "full_period_all_boroughs": {"metrics": 1.0058, "daily_data": 0.3469},
+      "full_period_manhattan": {"metrics": 1.0952, "daily_data": 0.4827},
+      "cross_month_all_boroughs": {"metrics": 0.5283, "daily_data": 0.2263}
+    }
+  },
+  "historical_evidence_note": "docs/verification/summary.md and details.json belong to the earlier October build with a different source fingerprint; they were not treated as this run",
+  "raw_evidence_directory": "data/verification/benchmark-2026-11-07"
+}

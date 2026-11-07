@@ -6,6 +6,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
+from contextlib import contextmanager
+from datetime import datetime, timezone
 
 import duckdb
 from prefect import flow, task
@@ -21,6 +24,26 @@ REQUIRED_TABLES = {
     "dim_payment_type", "mart_daily_performance", "mart_hourly_demand",
     "mart_zone_performance", "mart_payment_summary",
 }
+
+
+@contextmanager
+def measured_stage(timings, name):
+    started = time.perf_counter()
+    try:
+        yield
+    finally:
+        timings[name] = round(time.perf_counter() - started, 3)
+
+
+def save_optional_timings(path, timings):
+    if not path:
+        return
+    try:
+        destination = Path(path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(timings, indent=2) + "\n", encoding="utf-8")
+    except OSError as error:
+        print(f"Optional pipeline timing could not be saved: {error}", file=sys.stderr)
 
 
 def run(command, cwd=ROOT, env=None):
@@ -98,6 +121,10 @@ def publish_warehouse():
 
 @flow(name="NYC Taxi End-to-End Pipeline", log_prints=True)
 def nyc_taxi_pipeline():
+    timing_path = os.environ.get("PIPELINE_METRICS_PATH")
+    started = time.perf_counter()
+    timings = {"started_utc": datetime.now(timezone.utc).isoformat(),
+               "clock": "time.perf_counter", "stages_seconds": {}, "status": "failed"}
     WAREHOUSE.parent.mkdir(parents=True, exist_ok=True)
     try:
         LOCK.mkdir()
@@ -106,16 +133,26 @@ def nyc_taxi_pipeline():
             f"Another run holds {LOCK}; remove it manually only after checking that run has stopped"
         ) from error
     try:
-        CANDIDATE.unlink(missing_ok=True)
-        Path(str(CANDIDATE) + ".wal").unlink(missing_ok=True)
-        download_raw_data()
-        profile_raw_data()
-        build_dbt_models()
-        result = validate_warehouse()
-        publish_warehouse()
+        with measured_stage(timings["stages_seconds"], "candidate_cleanup"):
+            CANDIDATE.unlink(missing_ok=True)
+            Path(str(CANDIDATE) + ".wal").unlink(missing_ok=True)
+        with measured_stage(timings["stages_seconds"], "source_validation_ingestion"):
+            download_raw_data()
+        with measured_stage(timings["stages_seconds"], "profiling"):
+            profile_raw_data()
+        with measured_stage(timings["stages_seconds"], "dbt_build_and_tests"):
+            build_dbt_models()
+        with measured_stage(timings["stages_seconds"], "candidate_validation"):
+            result = validate_warehouse()
+        with measured_stage(timings["stages_seconds"], "publication"):
+            publish_warehouse()
+        timings["status"] = "success"
         print(f"Published warehouse: {result}")
         return result
     finally:
+        timings["total_seconds"] = round(time.perf_counter() - started, 3)
+        timings["finished_utc"] = datetime.now(timezone.utc).isoformat()
+        save_optional_timings(timing_path, timings)
         LOCK.rmdir()
 
 
