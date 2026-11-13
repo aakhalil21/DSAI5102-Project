@@ -1,10 +1,18 @@
+{#- trip_files: explicit list of every loaded monthly file, passed by the
+    pipeline. Without it the original glob (or DBT_TRIP_SOURCE) is used. -#}
+{%- set trip_files = var('trip_files', none) -%}
+
 with source_data as (
 
     select * exclude (filename, file_row_number),
         regexp_extract(filename, '[^/]+$') as source_filename,
         file_row_number as source_row_number,
     from read_parquet(
+        {% if trip_files -%}
+        [{% for path in trip_files %}'{{ path | replace("'", "''") }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+        {%- else -%}
         '{{ env_var("DBT_TRIP_SOURCE", "../data/raw/yellow_tripdata_2025-0[1-6].parquet") }}',
+        {%- endif %}
         file_row_number = true,
         filename = true,
         union_by_name = true

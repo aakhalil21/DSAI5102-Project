@@ -163,8 +163,9 @@ downloads and an image build, which that benchmark did not include.
 
 ## Capacity and scaling
 
-The current pipeline rebuilds the selected January-June 2025 dataset on
-each run. The measured rebuild, machine and resource limits are documented
+By default the pipeline rebuilds the selected January-June 2025 dataset on
+each run. New months can also be loaded one at a time (see "Incremental
+monthly batches" below). The measured rebuild, machine and resource limits are documented
 in `docs/verification/benchmark-2026-11-07.md`; those observations establish
 sufficiency only for this tested six-month workload and environment.
 
@@ -189,7 +190,7 @@ docker compose build pipeline dashboard
 docker compose run --rm pipeline python tests/synthetic_fixture.py
 docker compose stop dashboard
 docker compose run --rm pipeline
-docker compose run --rm pipeline python -m unittest discover -s tests -p 'test_*.py'
+docker compose run --rm pipeline python -m unittest discover -s tests -p "test_*.py"
 docker compose run --rm pipeline python tests/verify_warehouse.py
 ```
 
@@ -258,6 +259,154 @@ docker compose down
 ```
 
 The local data files remain in the project's data folder.
+
+## Incremental monthly batches
+
+NYC TLC publishes one Parquet file per month, so the batch unit is one
+monthly file. The pipeline has two modes:
+
+| Mode | What it does |
+|---|---|
+| `full` (default) | Rebuilds every month from `PERIOD_START` to `PERIOD_END` into a fresh candidate. With no settings this is exactly the January-June 2025 build. |
+| `incremental` | Finds the last loaded month in the `pipeline_batches` table and loads only the next calendar month, if TLC has published it. It never skips ahead, so months always load in order with no gaps. |
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PIPELINE_MODE` | `full` | `full` or `incremental` |
+| `PERIOD_START`, `PERIOD_END` | `2025-01`, `2025-06` | Inclusive months for a full rebuild |
+| `MAX_MONTH` | none | Incremental mode never loads a month after this (`YYYY-MM`) |
+| `PIPELINE_BATCH_MONTH` | none | Explicitly reprocess an already loaded month (`YYYY-MM`) |
+| `PIPELINE_SCHEDULE_CRON`, `PIPELINE_SCHEDULE_TZ` | `0 6 2 * *`, `UTC` | Monthly schedule (06:00 on the 2nd) |
+
+Incremental mode needs a warehouse that already has the `pipeline_batches`
+log, so run one full rebuild first. Then check for new data:
+
+```bash
+docker compose stop dashboard
+docker compose run --rm -e PIPELINE_MODE=incremental pipeline
+docker compose up -d dashboard
+```
+
+The check works like this:
+
+- The next file's URL is predictable
+  (`https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_YYYY-MM.parquet`).
+  The pipeline sends one lightweight HEAD request for it.
+- HTTP 403/404 means the month is not published yet. The run logs
+  "No new data" and ends successfully without changing anything.
+- Timeouts and other errors fail the run after the usual task retries.
+- A published file is downloaded through the normal validated path (a
+  `.part` file, schema and row checks, quarantine of bad files, SHA-256).
+  It is then added to `data/raw/source_manifest.json`.
+- Every already loaded file must still match its recorded checksum. An
+  unexpected change stops the run; changed files are never reloaded
+  silently.
+
+How a batch is applied:
+
+1. The live warehouse is copied to the candidate.
+2. The project period is extended to the end of the new month.
+3. dbt reclassifies only the new file's rows plus rows from any loaded file
+   whose pickup falls in the new month. An example is a 1 July pickup
+   recorded in the June file: it was rejected as outside the period and is
+   now accepted. These are the only rows whose classification can change.
+4. `fact_trips` and `rejected_trips` are incremental dbt models. Each
+   reclassified `trip_id` is removed from both tables before the new
+   classification is inserted, so rows are never duplicated and rerunning a
+   batch changes nothing.
+5. Dimensions and marts are rebuilt from `fact_trips`.
+6. All dbt tests and the candidate checks run over all loaded files. The
+   checks cover source rows = accepted + rejected per file, agreement
+   between the batch log and the manifest, and contiguous months.
+7. Only then is the candidate published, using the same checkpoint and
+   atomic replace as a full rebuild. A failed batch leaves the live
+   warehouse and batch log unchanged.
+
+Incremental loading therefore ends in the same state as a full rebuild of
+the same months. `tests/synthetic_incremental_fixture.py` checks this after
+every batch. In incremental mode, `int_trip_quality` holds only that run's
+reclassified rows. Each batch is profiled to the ignored
+`data/profiles/data_profile_YYYY-MM.md`; the submitted January-June
+profile is only written by a default full rebuild.
+
+The batch log `pipeline_batches` has one row per month with:
+
+- file name, source URL and SHA-256
+- source, accepted and rejected row counts
+- status, load mode and processed-at UTC time
+
+The dashboard shows the loaded month range and the last processed time
+from this table.
+
+### Monthly schedule
+
+Prefect serves the flow in incremental mode on a cron schedule. The
+optional `scheduler` service is under a Compose profile, so it never
+starts with the default commands:
+
+```bash
+docker compose --profile schedule up -d scheduler
+docker compose --profile schedule logs -f scheduler
+docker compose --profile schedule stop scheduler
+```
+
+The service runs a local Prefect server in its container. Its database
+(the deployment, schedule and run history) is kept in the named Docker
+volume `prefect-home`, so restarts don't lose it. `docker compose down -v`
+deletes that volume.
+
+**Prefect UI.** Once the logs show "being served", open
+http://localhost:4200 in your browser:
+
+- **Deployments → `monthly-incremental-batches`:** the monthly cron
+  schedule (default `0 6 2 * *`, 06:00 UTC on the 2nd) and the upcoming
+  scheduled runs.
+- **Flow Runs:** run history with each run's state and logs. "No new data"
+  is a normal, successful outcome.
+- **Run now:** on the deployment page, choose **Run → Quick run**. From a
+  terminal:
+
+  ```bash
+  docker compose --profile schedule exec -e PREFECT_API_URL=http://127.0.0.1:4200/api scheduler prefect deployment run "NYC Taxi End-to-End Pipeline/monthly-incremental-batches"
+  ```
+
+  A manual run does the same as a scheduled one. It checks TLC for the
+  next month and, if that file is published, downloads it and updates the
+  live warehouse.
+
+On restart, Prefect pauses the deployment's schedule while the service is
+stopping. When the service starts again, it re-registers the deployment and
+regenerates the upcoming scheduled runs within about a minute. Completed run
+history is kept.
+
+**Windows note:** the dashboard holds the warehouse file open, and that
+blocks publication. Stop the dashboard before a scheduled or manual run
+publishes:
+
+```bash
+docker compose stop dashboard
+```
+
+If the dashboard was running, the run fails with a clear "Publication
+blocked" message and the live warehouse is unchanged. Stop the dashboard
+and start the run again with **Run** or the command above, then restart
+the dashboard with `docker compose up -d dashboard`.
+
+### Confirm a full rebuild still matches the submitted numbers
+
+```bash
+docker compose stop dashboard
+docker compose run --rm pipeline
+docker compose run --rm pipeline python tests/verify_warehouse.py
+docker compose run --rm pipeline python -c "import duckdb; db = duckdb.connect('data/warehouse/nyc_taxi.duckdb', read_only=True); [print(r) for r in db.execute('select month, source_rows, accepted_rows, rejected_rows from pipeline_batches order by month').fetchall()]"
+```
+
+Expected results:
+
+- Totals: 23,886,241 accepted rows, 197,143 rejected rows, 22,560,818
+  eligible rows, $637,824,068.09 recorded charges and 181 daily rows.
+- Per-month counts equal to `docs/verification/summary.md`.
+- dbt reports 12 models and 43 tests passing.
 
 ## Verification evidence
 

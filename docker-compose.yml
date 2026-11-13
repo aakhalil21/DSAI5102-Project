@@ -19,6 +19,48 @@ services:
       - python
       - orchestration/pipeline.py
 
+  # Optional monthly incremental schedule. Not started by default:
+  #   docker compose --profile schedule up -d scheduler
+  scheduler:
+    profiles:
+      - schedule
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    working_dir: /app
+
+    volumes:
+      - ./data:/app/data
+      - ./data/verification/dbt-target:/app/transformations/target
+      - ./data/verification/dbt-logs:/app/transformations/logs
+      # Prefect database (deployment, schedule, run history) survives restarts.
+      - prefect-home:/prefect-home
+
+    # Prefect UI and API: http://localhost:4200
+    ports:
+      - "4200:4200"
+
+    environment:
+      PREFECT_LOGGING_LEVEL: INFO
+      PREFECT_HOME: /prefect-home
+      # The local Prefect server listens on all container interfaces so the
+      # published port works; the flow's own client still uses 127.0.0.1.
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      # The browser UI calls the API through the published port.
+      PREFECT_UI_API_URL: http://localhost:4200/api
+      PIPELINE_MODE: incremental
+      PIPELINE_SCHEDULE_CRON: ${PIPELINE_SCHEDULE_CRON:-0 6 2 * *}
+      PIPELINE_SCHEDULE_TZ: ${PIPELINE_SCHEDULE_TZ:-UTC}
+      MAX_MONTH: ${MAX_MONTH:-}
+
+    restart: unless-stopped
+
+    command:
+      - python
+      - orchestration/schedule.py
+
   dashboard:
     build:
       context: .
@@ -38,4 +80,7 @@ services:
       - dashboard/app.py
       - --server.address=0.0.0.0
       - --server.port=8501
+
+volumes:
+  prefect-home:
 

@@ -1,7 +1,22 @@
+{#- Full mode: classify every loaded row.
+    Incremental batch: classify only the working set, i.e. the batch file's
+    rows plus rows from any loaded file whose pickup falls in the batch month.
+    Only those rows can change classification when the period is extended to
+    include the batch month; fact_trips and rejected_trips replace them by
+    trip_id. -#}
+{%- set batch_file = var('batch_file', none) -%}
+
 with trips as (
 
     select *
     from {{ ref('stg_yellow_taxi_trips') }}
+    {%- if batch_file %}
+    where source_filename = '{{ batch_file }}'
+        or (
+            pickup_datetime >= timestamp '{{ var("batch_start") }} 00:00:00'
+            and pickup_datetime < timestamp '{{ var("batch_end") }} 00:00:00'
+        )
+    {%- endif %}
 
 ),
 
@@ -174,9 +189,9 @@ enriched as (
                 then 'invalid_timestamp_order'
 
             when trips.pickup_datetime
-                < timestamp '2025-01-01 00:00:00'
+                < timestamp '{{ var("period_start") }} 00:00:00'
                 or trips.pickup_datetime
-                >= timestamp '2025-07-01 00:00:00'
+                >= timestamp '{{ var("period_end") }} 00:00:00'
                 then 'pickup_outside_project_period'
 
             when trips.pickup_location_id is null

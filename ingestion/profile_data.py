@@ -1,15 +1,24 @@
+import argparse
+import calendar
 from pathlib import Path
+import sys
 
 import duckdb
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-TRIP_FILE_GLOB = (
+from ingestion.download_data import (  # noqa: E402
+    DEFAULT_PERIOD_END, DEFAULT_PERIOD_START, configured_period,
+    format_month, month_range, next_month, parse_month, trip_filename,
+)
+
+RAW_DIR = (
     PROJECT_ROOT
     / "data"
     / "raw"
-    / "yellow_tripdata_2025-0[1-6].parquet"
 )
 
 ZONE_FILE = (
@@ -24,6 +33,36 @@ REPORT_FILE = (
     / "docs"
     / "data_profile_january_june_2025.md"
 )
+
+# Non-default periods and incremental batches are profiled into an ignored
+# location so the submitted January-June report is never overwritten.
+EXTRA_REPORT_DIR = (
+    PROJECT_ROOT
+    / "data"
+    / "profiles"
+)
+
+
+def period_label(start, end):
+    """Human-readable label, e.g. 'January-June 2025' or 'July 2025'."""
+
+    start_name = calendar.month_name[start[1]]
+    end_name = calendar.month_name[end[1]]
+    if start == end:
+        return "{} {}".format(start_name, start[0])
+    if start[0] == end[0]:
+        return "{}-{} {}".format(start_name, end_name, end[0])
+    return "{} {}-{} {}".format(start_name, start[0], end_name, end[0])
+
+
+def report_path(start, end):
+    if (start, end) == (parse_month(DEFAULT_PERIOD_START), parse_month(DEFAULT_PERIOD_END)):
+        return REPORT_FILE
+    if start == end:
+        return EXTRA_REPORT_DIR / "data_profile_{}.md".format(format_month(start))
+    return EXTRA_REPORT_DIR / "data_profile_{}_{}.md".format(
+        format_month(start), format_month(end)
+    )
 
 
 def make_sql_path(path):
@@ -44,12 +83,24 @@ def format_value(value):
     return "{:,}".format(value)
 
 
-def main():
-    """Profile the January-June 2025 taxi data."""
+def main(start=None, end=None, output=None):
+    """Profile the monthly taxi files from start to end (default January-June 2025)."""
 
-    if len(list((PROJECT_ROOT / "data" / "raw").glob("yellow_tripdata_2025-0[1-6].parquet"))) != 6:
+    if start is None or end is None:
+        start, end = configured_period()
+    months = month_range(start, end)
+    label = period_label(start, end)
+    report_file = output or report_path(start, end)
+    period_start = "{}-01".format(format_month(start))
+    period_end = "{}-01".format(format_month(next_month(end)))
+    trip_files = [RAW_DIR / trip_filename(month) for month in months]
+
+    missing = [path.name for path in trip_files if not path.is_file()]
+    if missing:
         raise FileNotFoundError(
-            "All six monthly trip files are required"
+            "All {} monthly trip files are required; missing: {}".format(
+                len(trip_files), ", ".join(missing)
+            )
         )
 
     if not ZONE_FILE.exists():
@@ -57,7 +108,9 @@ def main():
             "Zone file not found: {}".format(ZONE_FILE)
         )
 
-    trip_path = make_sql_path(TRIP_FILE_GLOB)
+    trip_path = ", ".join(
+        "'{}'".format(make_sql_path(path)) for path in trip_files
+    )
     zone_path = make_sql_path(ZONE_FILE)
 
     connection = duckdb.connect()
@@ -66,7 +119,7 @@ def main():
         """
         CREATE VIEW raw_trips AS
         SELECT *
-        FROM read_parquet('{}')
+        FROM read_parquet([{}])
         """.format(trip_path)
     )
 
@@ -153,13 +206,14 @@ def main():
             ),
             COUNT_IF(
                 tpep_pickup_datetime
-                    < TIMESTAMP '2025-01-01'
+                    < CAST(? AS TIMESTAMP)
                 OR
                 tpep_pickup_datetime
-                    >= TIMESTAMP '2025-07-01'
+                    >= CAST(? AS TIMESTAMP)
             )
         FROM raw_trips
-        """
+        """,
+        [period_start, period_end],
     ).fetchone()
 
     unmatched = connection.execute(
@@ -221,13 +275,13 @@ def main():
         "Passenger counts above 8",
         "Trip distances above 100 miles",
         "Trips lasting more than 6 hours",
-        "Pickup timestamps outside January-June 2025",
+        "Pickup timestamps outside {}".format(label),
     ]
 
     report = []
 
     report.append(
-        "# January-June 2025 Yellow Taxi Data Profile"
+        "# {} Yellow Taxi Data Profile".format(label)
     )
     report.append("")
     report.append("## Dataset summary")
@@ -335,12 +389,12 @@ def main():
         "financial-eligibility, and metric-specific filters to accepted trips."
     )
 
-    REPORT_FILE.parent.mkdir(
+    report_file.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    REPORT_FILE.write_text(
+    report_file.write_text(
         "\n".join(report) + "\n",
         encoding="utf-8",
     )
@@ -349,8 +403,19 @@ def main():
 
     print("Data profiling completed successfully.")
     print("Report created at:")
-    print(REPORT_FILE)
+    print(report_file)
+    return report_file
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--month",
+        help="Profile only this YYYY-MM batch file (incremental mode).",
+    )
+    arguments = parser.parse_args()
+    if arguments.month:
+        batch = parse_month(arguments.month)
+        main(batch, batch)
+    else:
+        main()

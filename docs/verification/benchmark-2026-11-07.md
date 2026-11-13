@@ -36,7 +36,7 @@ From the repository root, with Docker Desktop running:
 docker info --format '{{.ServerVersion}} {{.MemTotal}} {{.NCPU}}'
 docker compose build pipeline dashboard
 python tests/benchmark_pipeline.py --output data/verification/benchmark-2026-11-07
-docker compose run --rm pipeline python -m unittest discover -s tests -p 'test_*.py'
+docker compose run --rm pipeline python -m unittest discover -s tests -p "test_*.py"
 docker compose run --rm pipeline python tests/verify_warehouse.py
 docker compose run --rm pipeline python tests/synthetic_fixture.py
 Copy-Item tests/benchmark_dashboard_queries.py data/verification/benchmark-2026-11-07/dashboard_queries_runner.py

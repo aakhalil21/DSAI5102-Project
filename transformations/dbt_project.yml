@@ -15,6 +15,13 @@ clean-targets:
   - target
   - dbt_packages
 
+# Project period (start inclusive, end exclusive). The pipeline passes these
+# with --vars; the defaults reproduce the submitted January-June 2025 build.
+# batch_file / batch_start / batch_end are set only for an incremental batch.
+vars:
+  period_start: "2025-01-01"
+  period_end: "2025-07-01"
+
 models:
   taxi_pipeline:
     staging:

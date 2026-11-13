@@ -312,6 +312,28 @@ if pd.isna(minimum_date) or pd.isna(maximum_date):
     st.stop()
 
 
+def loaded_period():
+    """Loaded month range from the batch log, else from accepted pickup dates."""
+
+    try:
+        batches = run_query(
+            """
+            select min(month) as first_month, max(month) as last_month,
+                max(processed_at_utc) as last_processed
+            from main.pipeline_batches
+            """
+        )
+        first = pd.to_datetime(batches.loc[0, "first_month"] + "-01")
+        last = pd.to_datetime(batches.loc[0, "last_month"] + "-01")
+        processed = batches.loc[0, "last_processed"]
+    except (duckdb.Error, OSError, TypeError, ValueError):
+        first, last, processed = minimum_date, maximum_date, None
+    return f"{first:%b %Y} – {last:%b %Y}", processed
+
+
+period_text, last_processed = loaded_period()
+
+
 borough_data = run_query(
     """
     select distinct
@@ -328,7 +350,7 @@ borough_options = [
 
 
 st.sidebar.markdown("### Filters")
-st.sidebar.caption("January-June 2025 · pickup records")
+st.sidebar.caption(f"Data loaded: {period_text} · pickup records")
 
 if "pickup_dates" not in st.session_state:
     st.session_state.pickup_dates = (minimum_date, maximum_date)
@@ -371,6 +393,8 @@ else:
 st.sidebar.caption(
     f"Showing {start_date:%d %b} – {end_date:%d %b} · {selected_borough}"
 )
+if last_processed is not None and not pd.isna(last_processed):
+    st.sidebar.caption(f"Last batch processed: {last_processed:%d %b %Y %H:%M} UTC")
 
 st.markdown(
     f"""
@@ -940,5 +964,5 @@ st.caption(
 
 st.caption(
     "Source: New York City Taxi and Limousine Commission · "
-    "January-June 2025 Yellow Taxi Trip Records and Taxi Zone Lookup."
+    f"{period_text} Yellow Taxi Trip Records and Taxi Zone Lookup."
 )

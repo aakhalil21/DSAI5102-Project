@@ -1,8 +1,9 @@
-"""Download and validate January-June 2025 source files."""
+"""Download and validate monthly TLC source files (default January-June 2025)."""
 
 import csv
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,14 +13,67 @@ import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
-DATA_FILES = {
-    **{
-        f"yellow_tripdata_2025-{month:02d}.parquet":
-        f"https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-{month:02d}.parquet"
-        for month in range(1, 7)
-    },
-    "taxi_zone_lookup.csv": "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv",
-}
+TRIP_URL_TEMPLATE = "https://d37ci6vzurychx.cloudfront.net/trip-data/{filename}"
+ZONE_FILENAME = "taxi_zone_lookup.csv"
+ZONE_URL = "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
+DEFAULT_PERIOD_START = "2025-01"
+DEFAULT_PERIOD_END = "2025-06"
+
+
+def parse_month(value):
+    """Return (year, month) for a YYYY-MM string."""
+    try:
+        parsed = datetime.strptime(str(value).strip(), "%Y-%m")
+    except ValueError as error:
+        raise ValueError(f"Expected a month as YYYY-MM, got {value!r}") from error
+    return parsed.year, parsed.month
+
+
+def format_month(month):
+    return f"{month[0]:04d}-{month[1]:02d}"
+
+
+def next_month(month):
+    """Return the calendar month after (year, month); December rolls over."""
+    year, number = month
+    return (year + 1, 1) if number == 12 else (year, number + 1)
+
+
+def month_range(start, end):
+    """Inclusive list of (year, month) from start to end."""
+    if start > end:
+        raise ValueError(f"Period start {format_month(start)} is after end {format_month(end)}")
+    months = [start]
+    while months[-1] < end:
+        months.append(next_month(months[-1]))
+    return months
+
+
+def trip_filename(month):
+    return f"yellow_tripdata_{format_month(month)}.parquet"
+
+
+def trip_url(month):
+    return TRIP_URL_TEMPLATE.format(filename=trip_filename(month))
+
+
+def configured_period(environ=None):
+    """Full-mode period from PERIOD_START / PERIOD_END (inclusive months)."""
+    environ = os.environ if environ is None else environ
+    start = parse_month(environ.get("PERIOD_START") or DEFAULT_PERIOD_START)
+    end = parse_month(environ.get("PERIOD_END") or DEFAULT_PERIOD_END)
+    month_range(start, end)
+    return start, end
+
+
+def data_files_for(months):
+    return {
+        **{trip_filename(month): trip_url(month) for month in months},
+        ZONE_FILENAME: ZONE_URL,
+    }
+
+
+DATA_FILES = data_files_for(month_range(*configured_period()))
 TRIP_TYPES = {
     "VendorID": "INTEGER", "tpep_pickup_datetime": "TIMESTAMP",
     "tpep_dropoff_datetime": "TIMESTAMP", "passenger_count": "DOUBLE",
@@ -149,26 +203,80 @@ def download_file(url, destination, expected=None):
         temporary.unlink(missing_ok=True)
 
 
-def main():
-    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    manifest = RAW_DATA_DIR / "source_manifest.json"
-    previous = {}
-    if manifest.exists():
-        try:
-            previous = json.loads(manifest.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as error:
-            raise ValueError(f"Invalid source manifest: {manifest}") from error
+class SourceCheckError(RuntimeError):
+    """The availability check failed for a reason other than 'not published'."""
+
+
+def check_month_published(url, timeout=(10, 30)):
+    """Lightweight existence check for a TLC file.
+
+    Returns True when the file exists and False for 403/404, which is how the
+    TLC CloudFront bucket answers for months that are not published yet. Any
+    other status, timeout or connection error raises SourceCheckError so the
+    caller's retry policy applies.
+    """
+    try:
+        response = requests.head(url, allow_redirects=True, timeout=timeout)
+        status = response.status_code
+        if status in (405, 501):
+            # HEAD unsupported: ask for a single byte instead.
+            with requests.get(
+                url, headers={"Range": "bytes=0-0"}, stream=True, timeout=timeout
+            ) as ranged:
+                status = ranged.status_code
+    except requests.RequestException as error:
+        raise SourceCheckError(f"Availability check failed for {url}: {error}") from error
+    if status in (200, 206):
+        return True
+    if status in (403, 404):
+        return False
+    raise SourceCheckError(f"Availability check for {url} returned HTTP {status}")
+
+
+def read_manifest(manifest):
+    if not manifest.exists():
+        return {}
+    try:
+        return json.loads(manifest.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as error:
+        raise ValueError(f"Invalid source manifest: {manifest}") from error
+
+
+def fetch_files(files, raw_dir):
+    """Validate or download each file, then merge its entry into the manifest.
+
+    Entries for files outside ``files`` are kept, so the checksum record of a
+    month loaded earlier is never dropped by a run over a different period.
+    """
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    manifest = raw_dir / "source_manifest.json"
+    previous = read_manifest(manifest)
     metadata = {}
-    for filename, url in DATA_FILES.items():
-        path = RAW_DATA_DIR / filename
+    for filename, url in files.items():
+        path = raw_dir / filename
         count = download_file(url, path, previous.get(filename))
         metadata[filename] = {
             "filename": filename, "source_url": url, "rows": count,
             "size_bytes": path.stat().st_size, "sha256": checksum(path),
         }
+    merged = {name: details for name, details in previous.items() if name not in metadata}
+    merged.update(metadata)
     temporary_manifest = manifest.with_suffix(".json.part")
-    temporary_manifest.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    temporary_manifest.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
     temporary_manifest.replace(manifest)
+    return metadata
+
+
+def download_month(month, raw_dir=None):
+    """Validate the zone file and fetch one monthly trip file (incremental batch)."""
+    return fetch_files(
+        {trip_filename(month): trip_url(month), ZONE_FILENAME: ZONE_URL},
+        RAW_DATA_DIR if raw_dir is None else raw_dir,
+    )
+
+
+def main():
+    fetch_files(DATA_FILES, RAW_DATA_DIR)
     print("Initial data validation completed successfully.")
 
 

@@ -23,7 +23,7 @@ docker compose build pipeline dashboard
 docker compose run --rm pipeline python tests/synthetic_fixture.py
 docker compose stop dashboard
 docker compose run --rm pipeline
-docker compose run --rm pipeline python -m unittest discover -s tests -p 'test_*.py'
+docker compose run --rm pipeline python -m unittest discover -s tests -p "test_*.py"
 docker compose run --rm pipeline python tests/verify_warehouse.py
 docker compose run --rm pipeline python tests/collect_verification.py --starting-commit ce9d05adfd944468a38a4658fc07dc40fcae892d --branch fix/final-verification --started-clean
 docker compose up -d dashboard
@@ -37,7 +37,8 @@ it does not establish that every chart or interaction works.
 ## November 2026 controlled rebuild
 
 `benchmark-2026-11-07.md` and `benchmark-2026-11-07.json` are a separate
-performance record for the current feature branch. They do not replace
+performance record for the revision that is now merged into `main` (it was
+measured on a feature branch before the merge). They do not replace
 `summary.md` or `details.json`, which document the earlier October revision.
 The detailed logs, timing JSON and five-second Docker memory samples are
 under ignored `data/verification/benchmark-2026-11-07/`.
@@ -57,3 +58,22 @@ the pipeline. Its monitor samples `docker stats` every five seconds; that is
 container usage, not process memory or a guaranteed peak. The script leaves
 the dashboard stopped so that post-run verification can finish before
 `docker compose up -d dashboard`.
+
+## Incremental batch checks (added later)
+
+These commands check the incremental monthly batch feature. They are not
+part of the October or November evidence above and do not rewrite it.
+`tests/synthetic_incremental_fixture.py` uses only synthetic files in a
+temporary folder. It never downloads data and never touches the real
+warehouse, raw files or dbt artifacts.
+
+```powershell
+docker compose run --rm pipeline python tests/synthetic_incremental_fixture.py
+docker compose run --rm pipeline python -m unittest discover -s tests -p "test_*.py"
+```
+
+To confirm that a full rebuild still matches `summary.md`, follow
+"Confirm a full rebuild still matches the submitted numbers" in the
+project README. `tests/collect_verification.py` is unchanged. It still
+asserts the January-June scope and overwrites `summary.md` and
+`details.json`, so run it only to deliberately regenerate that evidence.

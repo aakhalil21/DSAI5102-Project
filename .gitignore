@@ -31,6 +31,9 @@ docker-compose.override.yml
 !/data/warehouse/.gitkeep
 /data/verification/
 
+# Incremental batch profiles (generated)
+/data/profiles/
+
 # DuckDB databases and temporary files
 *.duckdb
 *.duckdb.wal
