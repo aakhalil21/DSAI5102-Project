@@ -5,6 +5,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 
@@ -137,9 +138,10 @@ st.markdown(
         border: 1px solid #C8D9F7;
         border-top: 3px solid #356AE6;
         border-radius: 14px;
-        padding: 1rem 0.95rem;
-        min-height: 138px;
+        padding: 0.9rem 0.95rem;
+        min-height: 112px;
         position: relative;
+        container-type: inline-size;
         box-shadow: 0 4px 14px rgba(30, 51, 74, 0.06);
     }
     .st-key-kpi-charges div[data-testid="stMetric"],
@@ -177,6 +179,8 @@ st.markdown(
     div[data-testid="stMetricValue"] {
         color: #172A3B;
         font-size: clamp(1.55rem, 2vw, 2.15rem);
+        /* Scale with the card's own width so values never truncate. */
+        font-size: clamp(1.2rem, 14cqi, 2.15rem);
         font-variant-numeric: tabular-nums;
         letter-spacing: -0.04em;
     }
@@ -203,11 +207,19 @@ st.markdown(
         div[data-testid="stMetric"]::after {display: none;}
         div[data-testid="stMetricLabel"] {padding-right: 0;}
     }
+    @media (max-width: 1300px) {
+        /* Three cards on the first row and two on the second. */
+        .st-key-kpi-row [data-testid="stHorizontalBlock"] {flex-wrap: wrap;}
+        .st-key-kpi-row [data-testid="stColumn"] {
+            min-width: calc(33.333% - 1rem);
+            flex: 1 1 calc(33.333% - 1rem);
+        }
+    }
     @media (max-width: 900px) {
         .block-container {padding: 3.5rem 1rem 2rem;}
         .taxi-header {padding: 1.5rem;}
         .taxi-header h1 {font-size: 1.9rem;}
-        div[data-testid="stMetric"] {min-height: 116px;}
+        div[data-testid="stMetric"] {min-height: 104px;}
         .st-key-kpi-row [data-testid="stHorizontalBlock"] {flex-wrap: wrap;}
         .st-key-kpi-row [data-testid="stColumn"] {
             min-width: min(100%, 205px);
@@ -281,6 +293,48 @@ def run_query(sql, parameters=()):
     # A replaced warehouse has a new file version, so cached queries refresh.
     version = DATABASE_FILE.stat().st_mtime_ns
     return _cached_query(sql, tuple(parameters), version)
+
+
+def share_text(count, total):
+    """Percentage of the total, with very small shares shown as <0.1%."""
+    share = 100 * count / total if total else 0
+    if 0 < share < 0.05:
+        return "<0.1%"
+    return f"{share:.1f}%"
+
+
+def trailing_average(daily, column, start, end, window=7):
+    """Trailing average over calendar days; days without trips count as zero.
+
+    The first window - 1 days have no value, so short ranges show no average.
+    """
+    days = pd.date_range(start, end, freq="D")
+    series = daily.set_index(pd.to_datetime(daily["pickup_date"]))[column]
+    series = series.reindex(days, fill_value=0)
+    return series.rolling(window, min_periods=window).mean()
+
+
+def batch_status_table(batches):
+    """One display row per loaded month from the pipeline_batches log."""
+    return pd.DataFrame({
+        "Month": [
+            pd.to_datetime(month + "-01").strftime("%b %Y")
+            for month in batches["month"]
+        ],
+        "Source rows": batches["source_rows"],
+        "Accepted rows": batches["accepted_rows"],
+        "Rejected rows": batches["rejected_rows"],
+        "Reconciles": [
+            "Yes" if source == accepted + rejected else "No"
+            for source, accepted, rejected in zip(
+                batches["source_rows"], batches["accepted_rows"],
+                batches["rejected_rows"],
+            )
+        ],
+        "Processed at (UTC)": pd.to_datetime(
+            batches["processed_at_utc"]
+        ).dt.strftime("%Y-%m-%d %H:%M"),
+    })
 
 
 if not DATABASE_FILE.exists():
@@ -552,6 +606,33 @@ daily_data = run_query(
     tuple(query_parameters),
 )
 
+def add_trailing_average(figure, column, color, hover_value):
+    """Overlay a 7-day trailing average when the range has at least 7 days."""
+    average = trailing_average(daily_data, column, start_date, end_date)
+    if average.dropna().empty:
+        return
+    figure.update_traces(name="Daily", opacity=0.55, showlegend=True)
+    figure.add_trace(go.Scatter(
+        x=list(average.index),
+        y=[None if pd.isna(value) else float(value) for value in average],
+        mode="lines",
+        name="7-day average",
+        line=dict(color=color, width=2.6),
+        connectgaps=False,
+        hovertemplate=(
+            "%{x|%b %d, %Y}<br>7-day average: " + hover_value + "<extra></extra>"
+        ),
+    ))
+    figure.update_layout(
+        showlegend=True,
+        legend=dict(
+            orientation="h", x=0, y=1.02, xanchor="left", yanchor="bottom",
+            font=dict(color=MUTED, size=11),
+        ),
+        margin=dict(l=18, r=22, t=36, b=30),
+    )
+
+
 left_chart, right_chart = st.columns(2)
 
 with left_chart:
@@ -573,8 +654,9 @@ with left_chart:
     daily_trip_figure.update_traces(
         line=dict(width=2.3),
         marker=dict(size=5),
-        hovertemplate="%{x|%b %d, %Y}<br>%{y:,.0f} trips<extra></extra>",
+        hovertemplate="%{x|%b %d, %Y}<br>Daily: %{y:,.0f} trips<extra></extra>",
     )
+    add_trailing_average(daily_trip_figure, "trip_count", "#1F4AAE", "%{y:,.0f} trips")
     daily_trip_figure.update_xaxes(title=None, tickformat="%b %d")
     daily_trip_figure.update_yaxes(title=None, rangemode="tozero", tickformat="~s")
 
@@ -602,7 +684,10 @@ with right_chart:
     daily_revenue_figure.update_traces(
         line=dict(width=2.3),
         marker=dict(size=5),
-        hovertemplate="%{x|%b %d, %Y}<br>$%{y:,.2f} recorded charges<extra></extra>",
+        hovertemplate="%{x|%b %d, %Y}<br>Daily: $%{y:,.2f} recorded charges<extra></extra>",
+    )
+    add_trailing_average(
+        daily_revenue_figure, "total_revenue", "#0B5E5A", "$%{y:,.2f} recorded charges",
     )
     daily_revenue_figure.update_xaxes(title=None, tickformat="%b %d")
     daily_revenue_figure.update_yaxes(
@@ -686,9 +771,16 @@ heatmap = px.imshow(
 style_chart(heatmap, height=350)
 heatmap.update_layout(margin=dict(l=18, r=22, t=44, b=30))
 heatmap.update_traces(
-    hovertemplate="%{y} · %{x}:00<br>%{z:,.0f} trips<extra></extra>",
+    hovertemplate="%{y} · %{x:02d}:00<br>%{z:,.0f} trips<extra></extra>",
 )
-heatmap.update_xaxes(title=None, dtick=4)
+heatmap.update_xaxes(
+    title=dict(text="Pickup hour", font=dict(color=MUTED, size=12)),
+    tickmode="array",
+    tickvals=list(range(0, 24, 4)),
+    ticktext=[f"{hour:02d}:00" for hour in range(0, 24, 4)],
+    tickangle=0,
+    tickfont=dict(color=MUTED, size=11),
+)
 heatmap.update_yaxes(title=None, showgrid=False)
 
 st.plotly_chart(
@@ -803,7 +895,7 @@ with right_chart:
         },
     )
     style_chart(zone_figure, height=340)
-    zone_figure.update_layout(margin=dict(l=18, r=22, t=48, b=30))
+    zone_figure.update_layout(margin=dict(l=18, r=40, t=48, b=30))
     zone_figure.update_traces(
         marker_color=[
             BOROUGH_COLORS.get(borough, SLATE)
@@ -813,8 +905,16 @@ with right_chart:
             "%{customdata[0]} (#%{customdata[2]})<br>%{x:,.0f} trips"
             "<br>Pickup borough: %{customdata[1]}<extra></extra>"
         ),
+        text=ranked_zones["trip_count"].map(lambda count: f"{count:,.0f}"),
+        textposition="outside",
+        textfont=dict(color=INK, size=12),
+        cliponaxis=False,
     )
-    zone_figure.update_xaxes(title=None, rangemode="tozero", tickformat="~s")
+    zone_figure.update_xaxes(
+        title=None,
+        range=[0, ranked_zones["trip_count"].max() * 1.3],
+        tickformat="~s",
+    )
     zone_figure.update_yaxes(
         title=None,
         showgrid=False,
@@ -888,16 +988,30 @@ with st.container(key="payment-chart"):
         y="payment_type_name",
         orientation="h",
     )
+    payment_total = ranked_payments["trip_count"].sum()
+    payment_labels = [
+        f"{count:,.0f} · {share_text(count, payment_total)}"
+        for count in ranked_payments["trip_count"]
+    ]
     style_chart(payment_figure, height=310)
-    payment_figure.update_layout(margin=dict(l=18, r=22, t=44, b=30))
+    payment_figure.update_layout(margin=dict(l=18, r=72, t=44, b=30))
     payment_figure.update_traces(
         marker_color=[
             PAYMENT_COLORS.get(method, SLATE)
             for method in ranked_payments["payment_type_name"]
         ],
-        hovertemplate="%{y}<br>%{x:,.0f} eligible trips<extra></extra>",
+        customdata=[[label] for label in payment_labels],
+        hovertemplate="%{y}<br>%{customdata[0]} of eligible trips<extra></extra>",
+        text=payment_labels,
+        textposition="outside",
+        textfont=dict(color=INK, size=12),
+        cliponaxis=False,
     )
-    payment_figure.update_xaxes(title=None, rangemode="tozero", tickformat="~s")
+    payment_figure.update_xaxes(
+        title=None,
+        range=[0, ranked_payments["trip_count"].max() * 1.3],
+        tickformat="~s",
+    )
     payment_figure.update_yaxes(title=None, showgrid=False)
 
     st.plotly_chart(
@@ -956,6 +1070,36 @@ with st.container(key="payment-table"):
         '<p class="table-scroll-hint">Swipe across the table for all columns.</p>',
         unsafe_allow_html=True,
     )
+
+# Read-only batch log; independent of the date and borough filters.
+with st.expander("Data pipeline status"):
+    try:
+        batch_log = run_query(
+            """
+            select month, source_rows, accepted_rows, rejected_rows,
+                processed_at_utc
+            from main.pipeline_batches
+            order by month
+            """
+        )
+    except (duckdb.Error, OSError):
+        batch_log = None
+    if batch_log is None or batch_log.empty:
+        st.caption("Batch log not available for this warehouse.")
+    else:
+        st.dataframe(
+            batch_status_table(batch_log),
+            width="stretch",
+            hide_index=True,
+            column_config={
+                column: st.column_config.NumberColumn(column, format="localized")
+                for column in ("Source rows", "Accepted rows", "Rejected rows")
+            },
+        )
+        st.caption(
+            "Months are loaded as monthly batches by the Prefect pipeline; "
+            "each batch must reconcile before the warehouse is published."
+        )
 
 st.caption(
     "Recorded charges are passenger charges, not profit. "

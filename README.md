@@ -338,7 +338,10 @@ The batch log `pipeline_batches` has one row per month with:
 - status, load mode and processed-at UTC time
 
 The dashboard shows the loaded month range and the last processed time
-from this table.
+from this table. Its collapsed "Data pipeline status" panel, at the bottom
+of the page, lists each loaded month with source, accepted and rejected
+rows, whether they reconcile, and the processed-at time. The panel only
+reads the table and ignores the date and borough filters.
 
 ### Monthly schedule
 
