@@ -380,22 +380,44 @@ def validate_warehouse(plan=None):
             "daily_rows": daily, "months": f"{batches[0][0]} to {batches[-1][0]}"}
 
 
+# Waits between attempts to replace the live warehouse (about two minutes in
+# total). Measured on Docker Desktop for Windows: the Docker dashboard, idle or
+# with an open read-only connection, does not block the replace; a Windows host
+# process holding the file open does (PermissionError). A short-lived hold,
+# e.g. a file scanner or a quick host query, is ridden out by these retries.
+PUBLISH_RETRY_DELAYS = (2, 4, 8, 15, 30, 30, 30)
+
+
 def publish_warehouse():
     # dbt's process and all validation readers are closed before replacement.
     with duckdb.connect(str(CANDIDATE)) as connection:
         connection.execute("checkpoint")
     if Path(str(CANDIDATE) + ".wal").exists():
         raise RuntimeError("Candidate WAL remains after checkpoint")
-    # A running dashboard may hold the destination open on Windows. In that case
-    # os.replace fails and the old database stays in place.
-    try:
-        os.replace(CANDIDATE, WAREHOUSE)
-    except OSError as error:
-        raise RuntimeError(
-            f"Publication blocked: could not replace {WAREHOUSE} ({error}). The live "
-            "warehouse is unchanged. Stop the dashboard (docker compose stop dashboard) "
-            "and run the pipeline again."
-        ) from error
+    # os.replace is atomic: each failed attempt leaves both the live warehouse
+    # and the candidate exactly as they were.
+    attempts = len(PUBLISH_RETRY_DELAYS) + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            os.replace(CANDIDATE, WAREHOUSE)
+            if attempt > 1:
+                print(f"Publication succeeded on attempt {attempt} of {attempts}")
+            return
+        except FileNotFoundError:
+            raise
+        except OSError as error:
+            if attempt == attempts:
+                raise RuntimeError(
+                    f"Publication blocked: could not replace {WAREHOUSE} after {attempts} "
+                    f"attempts ({error}). The live warehouse is unchanged and the tested "
+                    f"candidate is kept at {CANDIDATE}. Close any Windows program that has "
+                    "the warehouse file open (for example a dashboard or DuckDB client "
+                    "started outside Docker), then run the pipeline again."
+                ) from error
+            delay = PUBLISH_RETRY_DELAYS[attempt - 1]
+            print(f"Publication attempt {attempt} of {attempts} blocked ({error}); "
+                  f"retrying in {delay} s")
+            time.sleep(delay)
 
 
 # --------------------------------------------------------------------------

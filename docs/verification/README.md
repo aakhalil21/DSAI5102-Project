@@ -74,6 +74,22 @@ docker compose run --rm pipeline python -m unittest discover -s tests -p "test_*
 
 To confirm that a full rebuild still matches `summary.md`, follow
 "Confirm a full rebuild still matches the submitted numbers" in the
-project README. `tests/collect_verification.py` is unchanged. It still
-asserts the January-June scope and overwrites `summary.md` and
-`details.json`, so run it only to deliberately regenerate that evidence.
+project README.
+
+`tests/collect_verification.py` now needs `--output-dir`, so it never
+overwrites the October `summary.md` and `details.json` by accident. The
+historical command above predates this option. It checks the months in
+the warehouse's `pipeline_batches` log, or `PERIOD_START`/`PERIOD_END`
+when that log is absent. For the default January-June period its
+assertions are unchanged: six files, 181 days, 12 models and 43 tests.
+Example:
+
+```powershell
+docker compose run --rm pipeline python tests/collect_verification.py --starting-commit <commit> --branch <branch> --output-dir data/verification/collected
+```
+
+`incremental-2026-11-13.md` and its JSON companion record the real-data
+verification of the incremental feature: July and August 2025 loaded
+incrementally, then a full January-June rebuild. They also record the
+timings as measured and the dashboard file-lock findings. The raw outputs
+are under ignored `data/verification/incremental-2026-11-13/`.

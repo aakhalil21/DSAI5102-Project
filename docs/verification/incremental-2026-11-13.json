@@ -1,0 +1,337 @@
+{
+  "record": "Incremental monthly batch verification, 13 November 2026",
+  "scope": "Real TLC data on the developer machine (Windows 11, Docker Desktop). July 2025 loaded by CLI incremental run; August 2025 by a Prefect UI Quick run of the monthly-incremental-batches deployment; then a default full January-June rebuild. Single observations, not a controlled benchmark.",
+  "step0_jan_aug_warehouse": {
+    "captured_utc": "2026-11-13T16:40:50.648552+00:00",
+    "warehouse_size_bytes": 5258620928,
+    "pipeline_batches": [
+      {
+        "month": "2025-01",
+        "filename": "yellow_tripdata_2025-01.parquet",
+        "source": 3475226,
+        "accepted": 3473154,
+        "rejected": 2072,
+        "reconciles": true,
+        "sha256": "9af277e4c0d3f9deb30644da822981e1e7df6af58313170fd3aa8a474485488a",
+        "status": "loaded",
+        "load_mode": "full",
+        "processed_at_utc": "2026-11-13 11:42:14.112890"
+      },
+      {
+        "month": "2025-02",
+        "filename": "yellow_tripdata_2025-02.parquet",
+        "source": 3577543,
+        "accepted": 3572379,
+        "rejected": 5164,
+        "reconciles": true,
+        "sha256": "037cba555a73663f3a51a2c27816e40e3feb364769942bdf122b9da31e377bd3",
+        "status": "loaded",
+        "load_mode": "full",
+        "processed_at_utc": "2026-11-13 11:42:14.112890"
+      },
+      {
+        "month": "2025-03",
+        "filename": "yellow_tripdata_2025-03.parquet",
+        "source": 4145257,
+        "accepted": 4122975,
+        "rejected": 22282,
+        "reconciles": true,
+        "sha256": "20c4b77cce457b7cfdae77c5069ca7dc91c167f876a41467f4502ab69487a186",
+        "status": "loaded",
+        "load_mode": "full",
+        "processed_at_utc": "2026-11-13 11:42:14.112890"
+      },
+      {
+        "month": "2025-04",
+        "filename": "yellow_tripdata_2025-04.parquet",
+        "source": 3970553,
+        "accepted": 3935784,
+        "rejected": 34769,
+        "reconciles": true,
+        "sha256": "6f98938de9380a3f85600533816f0dc0e6d9b5b210e485d623952bac599bbe28",
+        "status": "loaded",
+        "load_mode": "full",
+        "processed_at_utc": "2026-11-13 11:42:14.112890"
+      },
+      {
+        "month": "2025-05",
+        "filename": "yellow_tripdata_2025-05.parquet",
+        "source": 4591845,
+        "accepted": 4527572,
+        "rejected": 64273,
+        "reconciles": true,
+        "sha256": "7ef46bcd0fceee7f8c0bb38a532be05bceefabb512d4bb0b32a7727dd862b15c",
+        "status": "loaded",
+        "load_mode": "full",
+        "processed_at_utc": "2026-11-13 11:42:14.112890"
+      },
+      {
+        "month": "2025-06",
+        "filename": "yellow_tripdata_2025-06.parquet",
+        "source": 4322960,
+        "accepted": 4254377,
+        "rejected": 68583,
+        "reconciles": true,
+        "sha256": "1bea7f5b09c744414451fa7fef09fbc5a393ffb1621c859be6ba0df23a14e1b6",
+        "status": "loaded",
+        "load_mode": "full",
+        "processed_at_utc": "2026-11-13 11:42:14.112890"
+      },
+      {
+        "month": "2025-07",
+        "filename": "yellow_tripdata_2025-07.parquet",
+        "source": 3898963,
+        "accepted": 3842898,
+        "rejected": 56065,
+        "reconciles": true,
+        "sha256": "1efa6a0458dc60341f7f81dcbb5015af731f42d1a109f4e0d594dd46970fd4ef",
+        "status": "loaded",
+        "load_mode": "incremental",
+        "processed_at_utc": "2026-11-13 11:50:57.927816"
+      },
+      {
+        "month": "2025-08",
+        "filename": "yellow_tripdata_2025-08.parquet",
+        "source": 3574091,
+        "accepted": 3526256,
+        "rejected": 47835,
+        "reconciles": true,
+        "sha256": "b982ace703e3564d92e94edae5ec93515f4f1fb07a5b95e7404c32464c1a6a89",
+        "status": "loaded",
+        "load_mode": "incremental",
+        "processed_at_utc": "2026-11-13 16:32:54.923756"
+      }
+    ],
+    "files_outside_batch_log": [],
+    "rejection_reasons": {
+      "2025-07": {
+        "invalid_timestamp_order": 56064,
+        "pickup_outside_project_period": 1
+      },
+      "2025-08": {
+        "invalid_timestamp_order": 47833,
+        "pickup_outside_project_period": 2
+      }
+    },
+    "totals": {
+      "accepted": 31255395,
+      "rejected": 301043,
+      "eligible": 29421180,
+      "eligible_recorded_charges": 837359919.660224,
+      "daily_rows": 243,
+      "first_day": "2025-01-01",
+      "last_day": "2025-08-31",
+      "duplicate_trip_ids": 0
+    },
+    "period_extension": {
+      "june_file_rows_with_july_pickup_accepted_after_july_load": 0,
+      "june_file_rows_with_july_pickup_still_rejected": [],
+      "raw_june_file_rows_with_pickup_on_or_after_2025_07_01": 0,
+      "july_file_rows_with_august_pickup_accepted_after_august_load": 0,
+      "accepted_out_of_month_rows_by_file": [
+        {
+          "file": "yellow_tripdata_2025-01.parquet",
+          "pickup_month": "2025-02",
+          "rows": 1
+        },
+        {
+          "file": "yellow_tripdata_2025-02.parquet",
+          "pickup_month": "2025-01",
+          "rows": 30
+        },
+        {
+          "file": "yellow_tripdata_2025-02.parquet",
+          "pickup_month": "2025-03",
+          "rows": 1
+        },
+        {
+          "file": "yellow_tripdata_2025-03.parquet",
+          "pickup_month": "2025-02",
+          "rows": 29
+        },
+        {
+          "file": "yellow_tripdata_2025-03.parquet",
+          "pickup_month": "2025-04",
+          "rows": 2
+        },
+        {
+          "file": "yellow_tripdata_2025-04.parquet",
+          "pickup_month": "2025-03",
+          "rows": 4
+        },
+        {
+          "file": "yellow_tripdata_2025-04.parquet",
+          "pickup_month": "2025-05",
+          "rows": 3
+        },
+        {
+          "file": "yellow_tripdata_2025-05.parquet",
+          "pickup_month": "2025-04",
+          "rows": 20
+        },
+        {
+          "file": "yellow_tripdata_2025-05.parquet",
+          "pickup_month": "2025-06",
+          "rows": 3
+        },
+        {
+          "file": "yellow_tripdata_2025-06.parquet",
+          "pickup_month": "2025-05",
+          "rows": 20
+        },
+        {
+          "file": "yellow_tripdata_2025-07.parquet",
+          "pickup_month": "2025-06",
+          "rows": 6
+        },
+        {
+          "file": "yellow_tripdata_2025-08.parquet",
+          "pickup_month": "2025-07",
+          "rows": 15
+        }
+      ],
+      "rejected_out_of_period_rows_by_file": [
+        {
+          "file": "yellow_tripdata_2025-01.parquet",
+          "pickup_month": "2024-12",
+          "rows": 21
+        },
+        {
+          "file": "yellow_tripdata_2025-03.parquet",
+          "pickup_month": "2007-12",
+          "rows": 1
+        },
+        {
+          "file": "yellow_tripdata_2025-03.parquet",
+          "pickup_month": "2009-01",
+          "rows": 1
+        },
+        {
+          "file": "yellow_tripdata_2025-05.parquet",
+          "pickup_month": "2009-01",
+          "rows": 1
+        },
+        {
+          "file": "yellow_tripdata_2025-07.parquet",
+          "pickup_month": "2009-01",
+          "rows": 1
+        },
+        {
+          "file": "yellow_tripdata_2025-08.parquet",
+          "pickup_month": "2009-01",
+          "rows": 1
+        },
+        {
+          "file": "yellow_tripdata_2025-08.parquet",
+          "pickup_month": "2025-09",
+          "rows": 1
+        }
+      ]
+    }
+  },
+  "timings": {
+    "july_incremental": {
+      "seconds": 429.943,
+      "measured_by": "PowerShell Measure-Command on the host (reported by the user)",
+      "includes_first_download": true
+    },
+    "august_incremental": {
+      "seconds": 385.159,
+      "measured_by": "Prefect flow run total_run_time (flow run mustard-beetle; Prefect UI showed 6 min 26 s)",
+      "includes_first_download": true,
+      "flow_run": {
+        "name": "mustard-beetle",
+        "state": "COMPLETED",
+        "start_utc": "2026-11-13T16:26:33.575212+00:00",
+        "end_utc": "2026-11-13T16:32:58.734623+00:00",
+        "parameters": {
+          "mode": "incremental"
+        }
+      },
+      "task_runs": [
+        {
+          "name": "Check TLC for the next monthly file",
+          "state": "COMPLETED",
+          "start_utc": "2026-11-13T16:26:34.173023+00:00",
+          "end_utc": "2026-11-13T16:26:34.684221+00:00",
+          "run_seconds": 0.511
+        },
+        {
+          "name": "Verify loaded source checksums",
+          "state": "COMPLETED",
+          "start_utc": "2026-11-13T16:26:34.746038+00:00",
+          "end_utc": "2026-11-13T16:26:37.497401+00:00",
+          "run_seconds": 2.751
+        },
+        {
+          "name": "Download and validate batch file",
+          "state": "COMPLETED",
+          "start_utc": "2026-11-13T16:26:37.560440+00:00",
+          "end_utc": "2026-11-13T16:26:43.657980+00:00",
+          "run_seconds": 6.098
+        },
+        {
+          "name": "Profile raw taxi data",
+          "state": "COMPLETED",
+          "start_utc": "2026-11-13T16:26:43.718160+00:00",
+          "end_utc": "2026-11-13T16:26:45.678564+00:00",
+          "run_seconds": 1.96
+        },
+        {
+          "name": "Build and test candidate dbt models",
+          "state": "COMPLETED",
+          "start_utc": "2026-11-13T16:28:41.583377+00:00",
+          "end_utc": "2026-11-13T16:32:55.508841+00:00",
+          "run_seconds": 253.925
+        },
+        {
+          "name": "Validate candidate warehouse",
+          "state": "COMPLETED",
+          "start_utc": "2026-11-13T16:32:55.570567+00:00",
+          "end_utc": "2026-11-13T16:32:58.390398+00:00",
+          "run_seconds": 2.82
+        }
+      ],
+      "untracked_gap_seconds_between_profiling_and_dbt": 115.905,
+      "untracked_gap_note": "Not a Prefect task: the flow copies the live warehouse to the candidate here."
+    },
+    "full_jan_jun_rebuild_step1": {
+      "seconds": 208.229,
+      "measured_by": "Prefect log timestamps 16:41:53.160 to 16:45:21.389 UTC (excludes container start; the host timer and the optional timing JSON were not captured for this run)",
+      "includes_downloads": false
+    },
+    "comparability": "Single observations, not a controlled benchmark. The incremental runs included first downloads and a warehouse copy; the full rebuild had no downloads. They are not directly comparable."
+  },
+  "step1_full_rebuild_checks": {
+    "source": 24083384,
+    "accepted": 23886241,
+    "rejected": 197143,
+    "eligible": 22560818,
+    "eligible_recorded_charges": 637824068.09,
+    "daily_rows": 181,
+    "first_day": "2025-01-01",
+    "last_day": "2025-06-30",
+    "per_month_matches_summary_md": true,
+    "batch_log_months": "2025-01 to 2025-06",
+    "manifest_keeps_july_and_august": true,
+    "dbt": {
+      "model_success": 12,
+      "test_pass": 43
+    },
+    "python_unit_tests_passed": 36,
+    "synthetic_fixture": "passed",
+    "synthetic_incremental_fixture": "passed"
+  },
+  "schedule": {
+    "deployment": "NYC Taxi End-to-End Pipeline/monthly-incremental-batches",
+    "cron": "0 6 2 * *",
+    "timezone": "UTC",
+    "per_run": "loads at most the single next month after the last loaded month",
+    "upcoming_runs_at_capture": [
+      "2026-12-02T06:00:00+00:00",
+      "2027-01-02T06:00:00+00:00",
+      "2027-02-02T06:00:00+00:00"
+    ]
+  },
+  "raw_evidence": "data/verification/incremental-2026-11-13/ (ignored by Git)"
+}

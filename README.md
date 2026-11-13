@@ -243,9 +243,11 @@ The Docker images contain copies of the source code, so rebuild
 the relevant service after changing its code.
 The pipeline builds data/warehouse/nyc_taxi_candidate.duckdb,
 closes and checkpoints it, then replaces the published file. A failed
-build or test leaves nyc_taxi.duckdb intact. Keep the dashboard stopped
-during publication, especially on Windows, where an open DuckDB file
-can block replacement. If a run crashes, check that no pipeline is
+build or test leaves nyc_taxi.duckdb intact. A Windows program (outside
+Docker) that holds the DuckDB file open can block the replacement; the
+pipeline retries for about two minutes, then fails safely with the live
+file unchanged (see the Windows note under "Monthly schedule"). Stopping
+the dashboard first remains the simplest routine. If a run crashes, check that no pipeline is
 running before removing data/warehouse/.pipeline.lock. Rerun the
 pipeline to discard its incomplete candidate. dbt build itself is
 not an all-or-nothing transaction.
@@ -379,18 +381,28 @@ stopping. When the service starts again, it re-registers the deployment and
 regenerates the upcoming scheduled runs within about a minute. Completed run
 history is kept.
 
-**Windows note:** the dashboard holds the warehouse file open, and that
-blocks publication. Stop the dashboard before a scheduled or manual run
-publishes:
+**Windows note (tested 13 Nov 2026 on Docker Desktop for Windows).**
 
-```bash
-docker compose stop dashboard
-```
+What is handled:
 
-If the dashboard was running, the run fails with a clear "Publication
-blocked" message and the live warehouse is unchanged. Stop the dashboard
-and start the run again with **Run** or the command above, then restart
-the dashboard with `docker compose up -d dashboard`.
+- The Docker `dashboard` service does **not** block publication. A
+  scheduled or manual run can publish while it is running, whether it is
+  idle or holding a read-only connection open. A full rebuild published
+  normally with the dashboard up, and its next query showed the new data.
+- If the warehouse file is briefly held by a Windows program, the final
+  replace is retried for about two minutes (waits of 2, 4, 8, 15, 30, 30
+  and 30 s). Examples are a file scanner or a quick query from a tool
+  running directly on Windows. Each attempt is logged.
+
+What still needs action: a Windows program that keeps the file open for
+longer still blocks publication. Examples are a Streamlit dashboard,
+DuckDB client or Python session started outside Docker. The run then
+fails with "Publication blocked". The live warehouse is unchanged and the
+tested candidate is kept. Close that program and start the run again with
+**Run** or the command above.
+
+Stopping the Docker dashboard around a run is no longer needed for
+publication. It is still harmless.
 
 ### Confirm a full rebuild still matches the submitted numbers
 

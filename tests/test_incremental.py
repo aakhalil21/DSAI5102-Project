@@ -294,10 +294,83 @@ class PublicationBlockedTests(unittest.TestCase):
             before = published.read_bytes()
             with patch.object(pipeline, "WAREHOUSE", published), patch.object(
                 pipeline, "CANDIDATE", candidate
-            ), patch.object(pipeline.os, "replace", side_effect=PermissionError("in use")):
-                with self.assertRaisesRegex(RuntimeError, "Stop the dashboard"):
+            ), patch.object(pipeline.os, "replace", side_effect=PermissionError("in use")) as replace, \
+                    patch.object(pipeline.time, "sleep") as sleep:
+                with self.assertRaisesRegex(RuntimeError, "Publication blocked.*live warehouse is unchanged"):
                     pipeline.publish_warehouse()
+            attempts = len(pipeline.PUBLISH_RETRY_DELAYS) + 1
+            self.assertEqual(replace.call_count, attempts)
+            self.assertEqual([c.args[0] for c in sleep.call_args_list], list(pipeline.PUBLISH_RETRY_DELAYS))
+            self.assertLessEqual(sum(pipeline.PUBLISH_RETRY_DELAYS), 150)
             self.assertEqual(published.read_bytes(), before)
+            with duckdb.connect(str(candidate), read_only=True) as connection:
+                self.assertEqual(connection.execute("select value from marker").fetchone()[0], "new")
+
+    def test_transient_block_is_retried_then_published(self):
+        with TemporaryDirectory() as directory:
+            published = Path(directory) / "published.duckdb"
+            candidate = Path(directory) / "candidate.duckdb"
+            for path, value in ((published, "old"), (candidate, "new")):
+                with duckdb.connect(str(path)) as connection:
+                    connection.execute(f"create table marker as select '{value}' as value")
+            real_replace = pipeline.os.replace
+            outcomes = [PermissionError("in use"), PermissionError("in use"), None]
+
+            def flaky(source, destination):
+                outcome = outcomes.pop(0)
+                if outcome:
+                    raise outcome
+                real_replace(source, destination)
+
+            with patch.object(pipeline, "WAREHOUSE", published), patch.object(
+                pipeline, "CANDIDATE", candidate
+            ), patch.object(pipeline.os, "replace", side_effect=flaky), \
+                    patch.object(pipeline.time, "sleep") as sleep:
+                pipeline.publish_warehouse()
+            self.assertEqual([c.args[0] for c in sleep.call_args_list], list(pipeline.PUBLISH_RETRY_DELAYS[:2]))
+            self.assertFalse(candidate.exists())
+            with duckdb.connect(str(published), read_only=True) as connection:
+                self.assertEqual(connection.execute("select value from marker").fetchone()[0], "new")
+
+    def test_missing_candidate_is_not_retried(self):
+        with TemporaryDirectory() as directory:
+            published = Path(directory) / "published.duckdb"
+            candidate = Path(directory) / "candidate.duckdb"
+            with duckdb.connect(str(candidate)) as connection:
+                connection.execute("create table marker as select 1 as value")
+            with patch.object(pipeline, "WAREHOUSE", published), patch.object(
+                pipeline, "CANDIDATE", candidate
+            ), patch.object(pipeline.os, "replace", side_effect=FileNotFoundError("gone")), \
+                    patch.object(pipeline.time, "sleep") as sleep:
+                with self.assertRaises(FileNotFoundError):
+                    pipeline.publish_warehouse()
+            sleep.assert_not_called()
+
+    def test_blocked_publication_releases_the_lock(self):
+        with TemporaryDirectory() as directory:
+            warehouse = Path(directory) / "warehouse" / "nyc_taxi.duckdb"
+            candidate = warehouse.with_name("nyc_taxi_candidate.duckdb")
+            lock = warehouse.parent / ".pipeline.lock"
+            warehouse.parent.mkdir()
+
+            def build(plan=None):
+                with duckdb.connect(str(candidate)) as connection:
+                    connection.execute("create table marker as select 'new' as value")
+
+            with patch.object(pipeline, "WAREHOUSE", warehouse), patch.object(
+                pipeline, "CANDIDATE", candidate
+            ), patch.object(pipeline, "LOCK", lock), patch.object(
+                pipeline, "download_raw_data"
+            ), patch.object(pipeline, "profile_raw_data"), patch.object(
+                pipeline, "build_dbt_models", side_effect=build
+            ), patch.object(pipeline, "validate_warehouse", return_value={}), patch.object(
+                pipeline.os, "replace", side_effect=PermissionError("in use")
+            ), patch.object(pipeline.time, "sleep"):
+                with self.assertRaisesRegex(RuntimeError, "Publication blocked"):
+                    pipeline.nyc_taxi_pipeline.fn(mode="full")
+            self.assertFalse(lock.exists())
+            self.assertFalse(warehouse.exists())
+            self.assertTrue(candidate.exists())
 
 
 class BatchProfileTests(unittest.TestCase):
