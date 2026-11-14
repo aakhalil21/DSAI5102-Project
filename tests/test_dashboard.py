@@ -265,5 +265,110 @@ class DashboardPolishTests(unittest.TestCase):
         ))
 
 
+class DashboardInsightAndMotionTests(unittest.TestCase):
+    """Computed insight lines, the freshness pill and run-scoped motion CSS."""
+
+    def setUp(self):
+        self.directory = TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+
+    def start_app(self, with_batches=True):
+        database = Path(self.directory.name) / "synthetic.duckdb"
+        build_synthetic_warehouse(database, with_batches)
+        environment = patch.dict(
+            os.environ, {"DASHBOARD_WAREHOUSE_PATH": str(database)},
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        app = AppTest.from_file(str(APP), default_timeout=30).run()
+        self.assertFalse(app.exception)
+        return app
+
+    def page_html(self, app):
+        return "\n".join(element.value for element in app.markdown)
+
+    def insights(self, app):
+        marker = '<p class="insight">'
+        return [
+            element.value.replace(marker, "").replace("</p>", "")
+            for element in app.markdown if element.value.startswith(marker)
+        ]
+
+    def test_insight_lines_default_view(self):
+        # Day d has (d + 1) * 1000 trips, so the last day, Wed 12 Mar, peaks.
+        self.assertEqual(self.insights(self.start_app()), [
+            "Peak day: Wed 12 Mar (10,000 trips)",
+            "Busiest pickup hour: 08:00",
+            "Manhattan: 100.0% of eligible pickups",
+            "Credit card: 75.0% of eligible trips",
+            "2 monthly batches · 1 does not reconcile",
+        ])
+
+    def test_insight_lines_follow_filters(self):
+        app = self.start_app()
+        app.sidebar.date_input[0].set_value(
+            (date(2025, 3, 3), date(2025, 3, 5))
+        ).run()
+        app.sidebar.selectbox[0].set_value("Manhattan").run()
+        self.assertFalse(app.exception)
+        insights = self.insights(app)
+        self.assertEqual(insights[0], "Peak day: Wed 5 Mar (3,000 trips)")
+        self.assertEqual(
+            insights[2],
+            "Top pickup zone: Midtown Center "
+            "(100.0% of eligible Manhattan pickups)",
+        )
+        # 6,000 trips: cash where k % 4 == 0 (1,499 after the Unknown trip).
+        self.assertEqual(insights[3], "Credit card: 75.0% of eligible trips")
+
+    def test_freshness_pill_and_anchors(self):
+        app = self.start_app()
+        page = self.page_html(app)
+        self.assertIn("Data through Feb 2025 · last batch 13 Nov 2026", page)
+        for anchor in ("overview", "when", "where", "payments", "pipeline"):
+            self.assertIn(f'href="#{anchor}"', page)
+        self.assertEqual(
+            [heading.anchor for heading in app.subheader],
+            ["overview", "when", "where", "payments", "pipeline"],
+        )
+
+    def test_no_batch_log_hides_pill_and_summary(self):
+        app = self.start_app(with_batches=False)
+        self.assertNotIn('class="freshness"', self.page_html(app))
+        self.assertEqual(len(self.insights(app)), 4)
+
+    def test_reveal_css_only_on_first_run(self):
+        app = self.start_app()
+        self.assertIn("animation: page-rise", self.page_html(app))
+        app.sidebar.selectbox[0].set_value("Manhattan").run()
+        self.assertNotIn("animation: page-rise", self.page_html(app))
+
+    def test_update_motion_only_when_values_change(self):
+        app = self.start_app()
+        # First run: nothing to compare against, so no update motion.
+        self.assertNotIn("@keyframes kpi-", self.page_html(app))
+        self.assertNotIn("chart-update", self.page_html(app))
+
+        app.sidebar.date_input[0].set_value(
+            (date(2025, 3, 3), date(2025, 3, 5))
+        ).run()
+        page = self.page_html(app)
+        # Trips and charges change; the constant averages do not.
+        for key in ("trips", "charges"):
+            self.assertIn(f"@keyframes kpi-{key}-", page)
+        for key in ("fare", "distance", "duration"):
+            self.assertNotIn(f"@keyframes kpi-{key}-", page)
+        self.assertIn("chart-update", page)
+        self.assertEqual(
+            [metric.value for metric in app.metric],
+            ["6,000", "$60,000.00", "$8.00", "1.00 mi", "10.0 min"],
+        )
+
+        # A rerun with the same filters animates nothing.
+        app.run()
+        self.assertNotIn("@keyframes kpi-", self.page_html(app))
+        self.assertNotIn("chart-update", self.page_html(app))
+
+
 if __name__ == "__main__":
     unittest.main()

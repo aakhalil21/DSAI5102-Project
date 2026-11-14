@@ -1,5 +1,6 @@
 import html
 import os
+import zlib
 from pathlib import Path
 
 import duckdb
@@ -54,10 +55,54 @@ PAYMENT_COLORS = {
 }
 PLOT_CONFIG = {"displayModeBar": "hover", "displaylogo": False}
 
-st.markdown(
-    """
+# The page reveal plays once per browser session: its CSS is only sent on the
+# first script run, so filter changes (reruns) cannot replay it.
+FIRST_RUN = "page_revealed" not in st.session_state
+st.session_state.page_revealed = True
+
+REVEAL_CSS = """
+    @keyframes page-rise {
+        from {opacity: 0; transform: translateY(8px);}
+        to {opacity: 1; transform: none;}
+    }
+    @keyframes page-fade {from {opacity: 0;} to {opacity: 1;}}
+    [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > *:not(:has(.st-key-kpi-row)),
+    .st-key-kpi-row [data-testid="stColumn"] {
+        animation: page-rise var(--dur-slow) var(--ease-enter) var(--reveal-delay, 300ms) backwards;
+    }
+    [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > *:has(.taxi-header) {--reveal-delay: 0ms;}
+    [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > *:has(.section-nav) {--reveal-delay: 60ms;}
+    .st-key-kpi-row [data-testid="stColumn"]:nth-child(1) {--reveal-delay: 120ms;}
+    .st-key-kpi-row [data-testid="stColumn"]:nth-child(2) {--reveal-delay: 180ms;}
+    .st-key-kpi-row [data-testid="stColumn"]:nth-child(3) {--reveal-delay: 240ms;}
+    .st-key-kpi-row [data-testid="stColumn"]:nth-child(4) {--reveal-delay: 300ms;}
+    .st-key-kpi-row [data-testid="stColumn"]:nth-child(5) {--reveal-delay: 360ms;}
+    @media (prefers-reduced-motion: reduce) {
+        [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > *:not(:has(.st-key-kpi-row)),
+        .st-key-kpi-row [data-testid="stColumn"] {
+            animation-name: page-fade;
+            animation-delay: 0ms;
+        }
+    }
+"""
+
+PAGE_CSS = """
     <style>
-    .block-container {padding-top: 3.5rem; padding-bottom: 2.5rem; max-width: 1380px;}
+    :root {
+        --dur-fast: 120ms;
+        --dur-normal: 200ms;
+        --dur-slow: 300ms;
+        --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+        --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+        --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+        --focus-ring: #1F4AAE;
+        --nav-offset: 3.75rem;
+    }
+    /* Style-only blocks take no space in the page flow. */
+    [data-testid="stLayoutWrapper"]:has(> .st-key-page-style),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-reveal-style),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-motion-style) {display: none;}
+    .block-container {padding-top: 4.5rem; padding-bottom: 2.5rem; max-width: 1380px;}
     .taxi-header {
         background: #142438;
         color: #F8FAFC;
@@ -84,7 +129,38 @@ st.markdown(
         padding: 0;
     }
     .taxi-header .subtitle {color: #D9E5EF; margin: 0 0 1rem; line-height: 1.45;}
-    .taxi-header .scope-badges {display: flex; flex-wrap: wrap; gap: 0.5rem;}
+    .taxi-header .hero-top {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        justify-content: space-between;
+        margin: 0 0 0.5rem;
+    }
+    .taxi-header .hero-top .eyebrow {margin: 0;}
+    .taxi-header .freshness {
+        align-items: center;
+        background: #1D3147;
+        border: 1px solid #40566D;
+        border-radius: 999px;
+        color: #D9E5EF;
+        display: inline-flex;
+        font-size: 0.75rem;
+        font-weight: 600;
+        gap: 0.45rem;
+        line-height: 1.3;
+        padding: 0.25rem 0.7rem;
+    }
+    .taxi-header .freshness i {
+        background: #5BC7A5;
+        border-radius: 50%;
+        display: inline-block;
+        flex: none;
+        height: 0.45rem;
+        width: 0.45rem;
+    }
+    .taxi-header .scope-badges {display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;}
+    .taxi-header .filter-hint {display: none; color: #E5C176; font-size: 0.8rem; font-weight: 600;}
     .taxi-header .scope-badge {
         color: #F7FAFC;
         background: #263C54;
@@ -95,7 +171,94 @@ st.markdown(
         font-weight: 600;
         padding: 0.3rem 0.65rem;
     }
-    .metric-note {color: #536579; margin: 0 0 0.3rem; padding-top: 1.1rem;}
+    .metric-note {color: #536579; margin: 0 0 0.3rem; padding-top: 0.6rem;}
+    [data-testid="stLayoutWrapper"]:has(> .st-key-section-nav) {
+        position: sticky;
+        top: var(--nav-offset);
+        z-index: 100;
+        margin-top: 0.75rem;
+    }
+    .section-nav {
+        background: #FFFFFF;
+        border: 1px solid #D7E0E9;
+        border-radius: 12px;
+        box-shadow: 0 4px 14px rgba(30, 51, 74, 0.08);
+        display: flex;
+        gap: 0.15rem;
+        overflow-x: auto;
+        padding: 0.3rem;
+    }
+    .section-nav a {
+        border-radius: 8px;
+        color: #243B52;
+        flex: none;
+        font-size: 0.86rem;
+        font-weight: 600;
+        padding: 0.35rem 0.8rem;
+        text-decoration: none;
+        transition: transform var(--dur-fast) var(--ease-standard);
+    }
+    .section-nav a:hover {background: #E7EFFE; color: #1F4AAE;}
+    /* While queries run, a thin line pulses under the nav. It is an overlay,
+       so nothing moves; it waits 200 ms so quick updates never flash it. */
+    @keyframes loading-pulse {from {opacity: 0.2;} to {opacity: 0.9;}}
+    .st-key-section-nav {position: relative;}
+    .st-key-section-nav::after {
+        background: #356AE6;
+        border-radius: 2px;
+        bottom: 1px;
+        content: "";
+        height: 2px;
+        left: 12px;
+        opacity: 0;
+        pointer-events: none;
+        position: absolute;
+        right: 12px;
+    }
+    [data-testid="stApp"][data-test-script-state="running"] .st-key-section-nav::after {
+        animation: loading-pulse 900ms var(--ease-standard) var(--dur-normal) infinite alternate;
+    }
+    .section-nav a:active {transform: scale(0.96);}
+    [data-testid="stMain"] {scroll-behavior: smooth;}
+    .block-container h3 {scroll-margin-top: calc(var(--nav-offset) + 4.25rem);}
+    .insight {
+        color: #243B52;
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin: -0.55rem 0 0.15rem;
+    }
+    .metric-defs {display: grid; grid-template-columns: 11rem 1fr; gap: 0.45rem 1rem; margin: 0;}
+    .metric-defs dt {color: #172A3B; font-weight: 650;}
+    .metric-defs dd {color: #3A4C5F; margin: 0;}
+    /* Messages (empty, error) share the card treatment. */
+    div[data-testid="stAlert"] {
+        border: 1px solid #D7E0E9;
+        border-radius: 14px;
+        box-shadow: 0 5px 18px rgba(30, 51, 74, 0.055);
+        overflow: hidden;
+    }
+    /* Keyboard focus: 2px ring everywhere in the main area and toolbar. */
+    [data-testid="stMain"] a:focus-visible,
+    [data-testid="stMain"] button:focus-visible,
+    [data-testid="stMain"] summary:focus-visible,
+    [data-testid="stMain"] [tabindex="0"]:focus-visible,
+    [data-testid="stHeader"] button:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+    /* Plotly's chart toolbar buttons and the scrollable page region. */
+    [data-testid="stMain"] .modebar-btn:focus-visible {
+        outline: 2px solid var(--focus-ring) !important;
+        outline-offset: 1px;
+    }
+    [data-testid="stMain"]:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -2px;
+    }
+    /* Pressed state for buttons and expander headers. */
+    [data-testid="stSidebar"] button:active,
+    [data-testid="stMain"] button:active {transform: scale(0.97);}
+    [data-testid="stExpander"] summary:active [data-testid="stMarkdownContainer"] {opacity: 0.7;}
     .block-container h3 {
         border-left: 0;
         letter-spacing: -0.02em;
@@ -113,26 +276,29 @@ st.markdown(
         transform: translateY(-50%);
         width: 3px;
     }
-    div[data-testid="stSidebar"] [data-testid="stSidebarContent"] {color: #F2F6FA;}
-    div[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {color: #D5E0EA;}
-    div[data-testid="stSidebar"] button,
-    div[data-testid="stSidebar"] input,
-    div[data-testid="stSidebar"] [data-baseweb="select"] > div {
-        transition: border-color 180ms ease, background-color 180ms ease,
-                    box-shadow 180ms ease;
+    [data-testid="stSidebar"] [data-testid="stSidebarContent"] {color: #F2F6FA;}
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {color: #D5E0EA;}
+    [data-testid="stSidebar"] button,
+    [data-testid="stSidebar"] input,
+    [data-testid="stSidebar"] [data-baseweb="select"] > div {
+        transition: border-color var(--dur-normal) var(--ease-standard),
+                    background-color var(--dur-normal) var(--ease-standard),
+                    transform var(--dur-fast) var(--ease-standard);
     }
-    div[data-testid="stSidebar"] button:hover,
-    div[data-testid="stSidebar"] input:hover,
-    div[data-testid="stSidebar"] [data-baseweb="select"] > div:hover {
+    [data-testid="stSidebar"] button:hover,
+    [data-testid="stSidebar"] input:hover,
+    [data-testid="stSidebar"] [data-baseweb="select"] > div:hover {
         border-color: #91B2E9;
         background-color: #30465E;
     }
-    div[data-testid="stSidebar"] button:focus-visible,
-    div[data-testid="stSidebar"] input:focus-visible,
-    div[data-testid="stSidebar"] [data-baseweb="select"]:focus-within {
+    /* One ring per control: on the field's frame, not the inner input. */
+    [data-testid="stSidebar"] button:focus-visible,
+    [data-testid="stSidebar"] [data-baseweb="input"]:has(input:focus-visible),
+    [data-testid="stSidebar"] [data-baseweb="select"]:focus-within {
         outline: 2px solid #E5C176;
         outline-offset: 2px;
     }
+    [data-testid="stSidebar"] input:focus-visible {outline: none;}
     div[data-testid="stMetric"] {
         background: #E7EFFE;
         border: 1px solid #C8D9F7;
@@ -143,6 +309,31 @@ st.markdown(
         position: relative;
         container-type: inline-size;
         box-shadow: 0 4px 14px rgba(30, 51, 74, 0.06);
+        transition: transform var(--dur-fast) var(--ease-standard);
+    }
+    /* Hover lift: the deeper shadow is a separate layer faded by opacity. */
+    div[data-testid="stMetric"]::before,
+    div[data-testid="stFullScreenFrame"]:has(> [data-testid="stPlotlyChart"])::before {
+        border-radius: 14px;
+        box-shadow: 0 12px 26px rgba(30, 51, 74, 0.14);
+        content: "";
+        inset: 0;
+        opacity: 0;
+        pointer-events: none;
+        position: absolute;
+        transition: opacity var(--dur-fast) var(--ease-standard);
+    }
+    div[data-testid="stMetric"]:hover,
+    div[data-testid="stFullScreenFrame"]:has(> [data-testid="stPlotlyChart"]):hover {
+        transform: translateY(-2px);
+    }
+    div[data-testid="stMetric"]:hover::before,
+    div[data-testid="stFullScreenFrame"]:has(> [data-testid="stPlotlyChart"]):hover::before {
+        opacity: 1;
+    }
+    div[data-testid="stFullScreenFrame"]:has(> [data-testid="stPlotlyChart"]) {
+        position: relative;
+        transition: transform var(--dur-fast) var(--ease-standard);
     }
     .st-key-kpi-charges div[data-testid="stMetric"],
     .st-key-kpi-fare div[data-testid="stMetric"] {
@@ -216,7 +407,7 @@ st.markdown(
         }
     }
     @media (max-width: 900px) {
-        .block-container {padding: 3.5rem 1rem 2rem;}
+        .block-container {padding: 4.5rem 1rem 2rem;}
         .taxi-header {padding: 1.5rem;}
         .taxi-header h1 {font-size: 1.9rem;}
         div[data-testid="stMetric"] {min-height: 104px;}
@@ -226,20 +417,50 @@ st.markdown(
             flex: 1 1 205px;
         }
     }
+    @media (max-width: 768px) {
+        /* The sidebar is collapsed here, so say where the filters are. */
+        .taxi-header .filter-hint {display: inline;}
+        .metric-defs {grid-template-columns: 1fr; gap: 0.1rem;}
+        .metric-defs dd {margin-bottom: 0.5rem;}
+    }
     @media (max-width: 600px) {
         .table-scroll-hint {display: block; color: #536579; font-size: 0.78rem; margin: 0.5rem 0 0;}
+        .section-nav a {padding: 0.35rem 0.55rem;}
     }
     @media (prefers-reduced-motion: reduce) {
-        div[data-testid="stSidebar"] button,
-        div[data-testid="stSidebar"] input,
-        div[data-testid="stSidebar"] [data-baseweb="select"] > div {
+        [data-testid="stSidebar"] button,
+        [data-testid="stSidebar"] input,
+        [data-testid="stSidebar"] [data-baseweb="select"] > div,
+        .section-nav a,
+        div[data-testid="stMetric"],
+        div[data-testid="stFullScreenFrame"]:has(> [data-testid="stPlotlyChart"]) {
             transition: none;
+        }
+        [data-testid="stMain"] {scroll-behavior: auto;}
+        div[data-testid="stMetric"]:hover,
+        div[data-testid="stFullScreenFrame"]:has(> [data-testid="stPlotlyChart"]):hover,
+        [data-testid="stSidebar"] button:active,
+        [data-testid="stMain"] button:active,
+        .section-nav a:active {
+            transform: none;
+        }
+        [data-testid="stApp"][data-test-script-state="running"] .st-key-section-nav::after {
+            animation: none;
+            opacity: 0.6;
         }
     }
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+"""
+
+with st.container(key="page-style"):
+    st.markdown(PAGE_CSS, unsafe_allow_html=True)
+# Kept apart from the page styles: replacing a style block drops its rules
+# for a moment, which is harmless here but would unstyle the whole page.
+with st.container(key="reveal-style"):
+    st.markdown(
+        "<style>" + (REVEAL_CSS if FIRST_RUN else "") + "</style>",
+        unsafe_allow_html=True,
+    )
 
 
 def style_chart(figure, height=310):
@@ -337,6 +558,80 @@ def batch_status_table(batches):
     })
 
 
+def batch_summary_text(batches):
+    """Header line for the pipeline panel, e.g. '6 monthly batches · all reconcile'."""
+    total = len(batches)
+    failing = int((
+        batches["source_rows"]
+        != batches["accepted_rows"] + batches["rejected_rows"]
+    ).sum())
+    noun = "monthly batch" if total == 1 else "monthly batches"
+    if failing == 0:
+        verdict = "reconciles" if total == 1 else "all reconcile"
+    elif failing == 1:
+        verdict = "1 does not reconcile"
+    else:
+        verdict = f"{failing} do not reconcile"
+    return f"{total} {noun} · {verdict}"
+
+
+def freshness_text(last_month, processed):
+    """Hero status pill; empty when the warehouse has no batch log."""
+    if processed is None or pd.isna(processed):
+        return ""
+    return (
+        f"Data through {last_month:%b %Y} · "
+        f"last batch {processed.day} {processed:%b %Y}"
+    )
+
+
+# Insight lines: one computed fact per section, from the frames the charts use.
+# Ties go to the first row in query order (earliest day, lowest hour).
+def peak_day_insight(daily):
+    row = daily.loc[daily["trip_count"].idxmax()]
+    day = pd.to_datetime(row["pickup_date"])
+    years = pd.to_datetime(daily["pickup_date"]).dt.year
+    year = f" {day:%Y}" if years.nunique() > 1 else ""
+    return (
+        f"Peak day: {day:%a} {day.day} {day:%b}{year} "
+        f"({row['trip_count']:,.0f} trips)"
+    )
+
+
+def busiest_hour_insight(hourly):
+    by_hour = hourly.groupby("pickup_hour")["trip_count"].sum().sort_index()
+    return f"Busiest pickup hour: {int(by_hour.idxmax()):02d}:00"
+
+
+def location_insight(boroughs, zones, selected_borough):
+    """Top borough share, or the top zone's share once a borough is selected."""
+    total = boroughs["trip_count"].sum()
+    if selected_borough == "All boroughs":
+        top = boroughs.loc[boroughs["trip_count"].idxmax()]
+        return (
+            f"{top['pickup_borough']}: "
+            f"{share_text(top['trip_count'], total)} of eligible pickups"
+        )
+    top = zones.loc[zones["trip_count"].idxmax()]
+    return (
+        f"Top pickup zone: {top['pickup_zone']} "
+        f"({share_text(top['trip_count'], total)} of eligible "
+        f"{selected_borough} pickups)"
+    )
+
+
+def payment_insight(payments):
+    top = payments.loc[payments["trip_count"].idxmax()]
+    share = share_text(top["trip_count"], payments["trip_count"].sum())
+    return f"{top['payment_type_name']}: {share} of eligible trips"
+
+
+def show_insight(text):
+    st.markdown(
+        f'<p class="insight">{html.escape(text)}</p>', unsafe_allow_html=True,
+    )
+
+
 if not DATABASE_FILE.exists():
     st.error(
         "The project warehouse is unavailable. Run the pipeline, "
@@ -382,10 +677,10 @@ def loaded_period():
         processed = batches.loc[0, "last_processed"]
     except (duckdb.Error, OSError, TypeError, ValueError):
         first, last, processed = minimum_date, maximum_date, None
-    return f"{first:%b %Y} – {last:%b %Y}", processed
+    return f"{first:%b %Y} – {last:%b %Y}", last, processed
 
 
-period_text, last_processed = loaded_period()
+period_text, last_month, last_processed = loaded_period()
 
 
 borough_data = run_query(
@@ -450,20 +745,41 @@ st.sidebar.caption(
 if last_processed is not None and not pd.isna(last_processed):
     st.sidebar.caption(f"Last batch processed: {last_processed:%d %b %Y %H:%M} UTC")
 
+freshness = freshness_text(last_month, last_processed)
+freshness_pill = (
+    f'<span class="freshness"><i></i>{html.escape(freshness)}</span>'
+    if freshness else ""
+)
 st.markdown(
     f"""
     <div class="taxi-header">
-      <p class="eyebrow">NYC YELLOW TAXI</p>
+      <div class="hero-top">
+        <p class="eyebrow">NYC YELLOW TAXI</p>{freshness_pill}
+      </div>
       <h1>Trip Analytics</h1>
       <p class="subtitle">Trip demand, passenger charges, and pickup patterns.</p>
       <div class="scope-badges">
         <span class="scope-badge">{start_date:%d %b %Y} – {end_date:%d %b %Y}</span>
         <span class="scope-badge">Pickup: {html.escape(selected_borough)}</span>
+        <span class="filter-hint">Change filters: tap » at the top left</span>
       </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
+with st.container(key="section-nav"):
+    st.markdown(
+        """
+        <nav class="section-nav" aria-label="Dashboard sections">
+          <a href="#overview">Overview</a>
+          <a href="#when">When</a>
+          <a href="#where">Where</a>
+          <a href="#payments">Payments</a>
+          <a href="#pipeline">Pipeline</a>
+        </nav>
+        """,
+        unsafe_allow_html=True,
+    )
 st.markdown(
     '<p class="metric-note">Standard metrics exclude trips with missing or '
     'negative fare or total amounts.</p>',
@@ -472,16 +788,25 @@ st.markdown(
 with st.expander("About these metrics"):
     st.markdown(
         """
-        - **Eligible trips** count accepted trips with non-missing,
-          non-negative fare and total amounts. Zero amounts remain eligible.
-        - **Recorded charges** are passenger charges, not profit.
-          Cash tips are not captured in the source tip field.
-        - **Average distance** excludes zero-distance trips and trips
-          over 100 miles. **Average duration** excludes trips over six hours.
-        - The heatmap shows total trips over the selected period;
-          weekdays can occur different numbers of times.
-        - Payment code 0 is shown as **Flex Fare trip**.
-        """
+        <dl class="metric-defs">
+          <dt>Eligible trips</dt>
+          <dd>Count accepted trips with non-missing, non-negative fare and
+            total amounts. Zero amounts remain eligible.</dd>
+          <dt>Recorded charges</dt>
+          <dd>Passenger charges, not profit. Cash tips are not captured in
+            the source tip field.</dd>
+          <dt>Average distance</dt>
+          <dd>Excludes zero-distance trips and trips over 100 miles.</dd>
+          <dt>Average duration</dt>
+          <dd>Excludes trips over six hours.</dd>
+          <dt>Heatmap</dt>
+          <dd>Shows total trips over the selected period; weekdays can occur
+            different numbers of times.</dd>
+          <dt>Flex Fare trip</dt>
+          <dd>Payment code 0 is shown under this name.</dd>
+        </dl>
+        """,
+        unsafe_allow_html=True,
     )
 
 
@@ -553,18 +878,74 @@ def compact_charges(value):
 
 
 charges = metrics.loc[0, "total_revenue"]
+kpi_values = {
+    "trips": display_number(metrics.loc[0, "total_trips"], "{:,.0f}"),
+    "charges": compact_charges(charges),
+    "fare": display_number(metrics.loc[0, "average_fare"], "$" + "{:,.2f}"),
+    "distance": display_number(metrics.loc[0, "average_distance"], "{:,.2f}", " mi"),
+    "duration": display_number(metrics.loc[0, "average_duration"], "{:,.1f}", " min"),
+}
+
+
+def update_motion_css(values, previous_values, filters_changed):
+    """CSS for this run's update motion; empty when nothing changed.
+
+    Each KPI value whose text differs from the previous run gets a 200 ms
+    highlight, and the charts fade in when the filters changed. Streamlit
+    rebuilds these elements on a rerun, so the rule must be absent when
+    nothing changed. The animation name carries a checksum of the value so
+    a reused element restarts it too. The displayed text is never altered.
+    """
+    rules = []
+    for key, value in values.items():
+        if previous_values.get(key, value) == value:
+            continue
+        name = f"kpi-{key}-{zlib.crc32(value.encode()):08x}"
+        target = f'.st-key-kpi-{key} [data-testid="stMetricValue"]'
+        rules.append(
+            f"@keyframes {name} {{from {{opacity: 0.2; transform: translateY(3px);}} "
+            f"to {{opacity: 1; transform: none;}}}}"
+            f"@keyframes {name}-fade {{from {{opacity: 0.2;}} to {{opacity: 1;}}}}"
+            f"{target} {{animation: {name} var(--dur-normal) var(--ease-enter);}}"
+            f"@media (prefers-reduced-motion: reduce) {{"
+            f"{target} {{animation-name: {name}-fade;}}}}"
+        )
+    if filters_changed:
+        rules.append(
+            "@keyframes chart-update {from {opacity: 0;} to {opacity: 1;}}"
+            # Only charts of the current run fade; outgoing ones are stale.
+            '[data-testid="stElementContainer"][data-stale="false"] '
+            '[data-testid="stPlotlyChart"] .js-plotly-plot '
+            "{animation: chart-update var(--dur-normal) var(--ease-enter);}"
+        )
+    return "<style>" + "".join(rules) + "</style>"
+
+
+current_filters = (start_date, end_date, selected_borough)
+with st.container(key="motion-style"):
+    st.markdown(
+        update_motion_css(
+            kpi_values,
+            st.session_state.get("shown_kpi_values", {}),
+            st.session_state.get("shown_filters", current_filters) != current_filters,
+        ),
+        unsafe_allow_html=True,
+    )
+st.session_state.shown_kpi_values = kpi_values
+st.session_state.shown_filters = current_filters
+
 with st.container(key="kpi-row"):
     metric_columns = st.columns(5, gap="small")
     with metric_columns[0].container(key="kpi-trips"):
         st.metric(
             "Eligible trips",
-            display_number(metrics.loc[0, "total_trips"], "{:,.0f}"),
+            kpi_values["trips"],
             help="Accepted trips with non-missing, non-negative fare and total amounts.",
         )
     with metric_columns[1].container(key="kpi-charges"):
         st.metric(
             "Recorded charges",
-            compact_charges(charges),
+            kpi_values["charges"],
             help=(
                 f"Exact recorded charges: ${charges:,.2f}. "
                 "Passenger charges among eligible trips; not profit."
@@ -573,24 +954,24 @@ with st.container(key="kpi-row"):
     with metric_columns[2].container(key="kpi-fare"):
         st.metric(
             "Average fare",
-            display_number(metrics.loc[0, "average_fare"], "$" + "{:,.2f}"),
+            kpi_values["fare"],
             help="Average fare_amount among eligible trips.",
         )
     with metric_columns[3].container(key="kpi-distance"):
         st.metric(
             "Average distance",
-            display_number(metrics.loc[0, "average_distance"], "{:,.2f}", " mi"),
+            kpi_values["distance"],
             help="Excludes zero-distance trips and trips over 100 miles.",
         )
     with metric_columns[4].container(key="kpi-duration"):
         st.metric(
             "Average duration",
-            display_number(metrics.loc[0, "average_duration"], "{:,.1f}", " min"),
+            kpi_values["duration"],
             help="Excludes trips longer than six hours.",
         )
 
 
-st.markdown("### Daily activity")
+st.subheader("Daily activity", anchor="overview")
 
 daily_data = run_query(
     """
@@ -605,6 +986,9 @@ daily_data = run_query(
     """.format(where_clause),
     tuple(query_parameters),
 )
+
+show_insight(peak_day_insight(daily_data))
+
 
 def add_trailing_average(figure, column, color, hover_value):
     """Overlay a 7-day trailing average when the range has at least 7 days."""
@@ -700,7 +1084,7 @@ with right_chart:
     )
 
 
-st.markdown("### When trips happen")
+st.subheader("When trips happen", anchor="when")
 
 hourly_data = run_query(
     """
@@ -723,6 +1107,8 @@ hourly_data = run_query(
     """.format(where_clause),
     tuple(query_parameters),
 )
+
+show_insight(busiest_hour_insight(hourly_data))
 
 weekday_order = [
     "Monday",
@@ -776,8 +1162,9 @@ heatmap.update_traces(
 heatmap.update_xaxes(
     title=dict(text="Pickup hour", font=dict(color=MUTED, size=12)),
     tickmode="array",
-    tickvals=list(range(0, 24, 4)),
-    ticktext=[f"{hour:02d}:00" for hour in range(0, 24, 4)],
+    # Six-hour ticks: four-hour labels collide on phone-width charts.
+    tickvals=list(range(0, 24, 6)),
+    ticktext=[f"{hour:02d}:00" for hour in range(0, 24, 6)],
     tickangle=0,
     tickfont=dict(color=MUTED, size=11),
 )
@@ -789,7 +1176,7 @@ st.plotly_chart(
 )
 
 
-st.markdown("### Pickup locations")
+st.subheader("Pickup locations", anchor="where")
 
 borough_summary = run_query(
     """
@@ -823,6 +1210,8 @@ zone_summary = run_query(
     """.format(where_clause),
     tuple(query_parameters),
 )
+
+show_insight(location_insight(borough_summary, zone_summary, selected_borough))
 
 left_chart, right_chart = st.columns(2)
 
@@ -938,7 +1327,7 @@ with right_chart:
     )
 
 
-st.markdown("### Payment methods")
+st.subheader("Payment methods", anchor="payments")
 
 payment_summary = run_query(
     """
@@ -977,6 +1366,8 @@ payment_summary = run_query(
 payment_summary["payment_type_name"] = payment_summary[
     "payment_type_name"
 ].fillna("Not specified")
+
+show_insight(payment_insight(payment_summary))
 
 with st.container(key="payment-chart"):
     st.markdown("**Eligible trips by payment method**")
@@ -1072,19 +1463,24 @@ with st.container(key="payment-table"):
     )
 
 # Read-only batch log; independent of the date and borough filters.
+st.subheader("Data pipeline", anchor="pipeline")
+try:
+    batch_log = run_query(
+        """
+        select month, source_rows, accepted_rows, rejected_rows,
+            processed_at_utc
+        from main.pipeline_batches
+        order by month
+        """
+    )
+except (duckdb.Error, OSError):
+    batch_log = None
+has_batch_log = batch_log is not None and not batch_log.empty
+if has_batch_log:
+    show_insight(batch_summary_text(batch_log))
+
 with st.expander("Data pipeline status"):
-    try:
-        batch_log = run_query(
-            """
-            select month, source_rows, accepted_rows, rejected_rows,
-                processed_at_utc
-            from main.pipeline_batches
-            order by month
-            """
-        )
-    except (duckdb.Error, OSError):
-        batch_log = None
-    if batch_log is None or batch_log.empty:
+    if not has_batch_log:
         st.caption("Batch log not available for this warehouse.")
     else:
         st.dataframe(
